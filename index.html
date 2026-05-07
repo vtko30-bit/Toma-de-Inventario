@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Control de Inventario</title>
+  <meta name="description" content="Aplicación multiusuario para control de inventario" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Inventario" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <h2 id="auth-title">Iniciar sesión</h2>
+      <p class="small" id="auth-mode-label"></p>
+      <div id="auth-fields-register" style="display:none;">
+        <label>Nombre completo<input id="auth-nombre" /></label>
+        <label>Empresa<input id="auth-empresa" placeholder="Ej. Mi Negocio" /></label>
+      </div>
+      <label>Correo<input type="email" id="auth-email" /></label>
+      <label>Contraseña<input type="password" id="auth-password" /></label>
+      <p id="auth-error" class="auth-error"></p>
+      <div class="actions">
+        <button id="auth-submit">Entrar</button>
+        <button id="auth-toggle" class="btn-link">Crear cuenta</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-shell" style="display:none;">
+    <header class="topbar">
+      <h1>Control de Inventario</h1>
+      <div class="topbar-actions">
+        <button id="btnNuevoInventarioTop" style="display:none;">Nuevo Inventario</button>
+        <div class="dropdown" id="exportDropdown">
+          <button id="btnExport">Exportar</button>
+          <div class="dropdown-menu" id="exportMenu">
+            <button id="btnExportCsv">CSV</button>
+            <button id="btnExportXlsx">Excel</button>
+          </div>
+        </div>
+        <div class="dropdown" id="userDropdown">
+          <button id="btnUser">Usuario</button>
+          <div class="dropdown-menu" id="userMenu">
+            <span id="userInfo" class="user-info"></span>
+            <button id="btnLogout">Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="sidebar">
+        <button class="nav-btn active" data-view="productos">Productos</button>
+        <button class="nav-btn" data-view="familias">Familias</button>
+        <button class="nav-btn" data-view="categorias">Categorías</button>
+        <button class="nav-btn" data-view="sucursales">Sucursales</button>
+        <button class="nav-btn" data-view="bodegas">Bodegas</button>
+        <button class="nav-btn" data-view="movimientos">Movimientos de inventario</button>
+        <button class="nav-btn" data-view="inventarios">Toma de Inventario</button>
+        <button class="nav-btn" data-view="usuarios" data-admin-only="true">Usuarios</button>
+      </nav>
+
+      <section class="content">
+        <article id="view-productos" class="view active"></article>
+        <article id="view-familias" class="view"></article>
+        <article id="view-categorias" class="view"></article>
+        <article id="view-sucursales" class="view"></article>
+        <article id="view-bodegas" class="view"></article>
+        <article id="view-movimientos" class="view"></article>
+        <article id="view-inventarios" class="view"></article>
+        <article id="view-usuarios" class="view"></article>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="auth.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
