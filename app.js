@@ -1182,39 +1182,82 @@ async function renderUsuariosSupabase(el) {
   if (!supabase) return;
   const { data: users } = await supabase
     .from("usuarios")
-    .select("id,email,nombre,role")
+    .select("id,email,nombre,role,created_at")
     .eq("tenant_id", tenantActual)
     .order("email");
 
+  const appUrl = window.location.origin + window.location.pathname;
+  const mensajeInvitacion = `Únete a mi inventario en ${appUrl}\nRegístrate con el nombre de empresa: ${tenantActual}`;
+
   el.innerHTML = `
     <div class="card">
-      <h2>Usuarios de la empresa</h2>
-      <p class="small">Empresa actual: <strong>${tenantActual}</strong>. Para invitar usuarios, compárteles el enlace de la app y dales el mismo nombre de empresa al registrarse.</p>
-      <table>
-        <thead><tr><th>Email</th><th>Nombre</th><th>Rol</th><th>Acciones</th></tr></thead>
-        <tbody>
-          ${(users || []).map((u) => `
-            <tr>
-              <td>${u.email}</td>
-              <td>${u.nombre || ""}</td>
-              <td>${u.role}</td>
-              <td>
-                ${u.id === window.Auth.currentUser.uid
-                  ? '<span class="small">(tú)</span>'
-                  : `<select class="rol-usuario" data-id="${u.id}">
-                      <option value="admin" ${u.role === "admin" ? "selected" : ""}>admin</option>
-                      <option value="usuario" ${u.role === "usuario" ? "selected" : ""}>usuario</option>
-                    </select>`}
-              </td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
+      <h2>Invitar nuevo usuario</h2>
+      <p>Por seguridad de Supabase, los usuarios nuevos deben <strong>registrarse ellos mismos</strong>. Sigue estos pasos:</p>
+      <ol style="line-height:1.8;">
+        <li>Comparte el enlace de la app y el nombre de tu empresa: <strong>${tenantActual}</strong></li>
+        <li>La otra persona entra al enlace y presiona <em>Crear cuenta</em></li>
+        <li>Se registra con su correo, contraseña y exactamente ese mismo nombre de empresa</li>
+        <li>Una vez registrada, vuelve aquí y cámbiale el rol (por defecto queda como <em>admin</em>)</li>
+      </ol>
+      <div class="grid">
+        <label>URL de la app<input id="inv-url" value="${appUrl}" readonly /></label>
+        <label>Nombre de empresa<input id="inv-tenant" value="${tenantActual}" readonly /></label>
+      </div>
+      <div class="actions">
+        <button id="btn-copiar-invitacion">Copiar invitación al portapapeles</button>
+        <button id="btn-abrir-app" class="btn-link">Abrir app en nueva pestaña</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Usuarios de la empresa (${users?.length || 0})</h2>
+      <p class="small">Empresa: <strong>${tenantActual}</strong></p>
+      ${(!users || users.length === 0)
+        ? '<p class="empty-state">Aún no hay usuarios registrados.</p>'
+        : `<table>
+            <thead><tr><th>Email</th><th>Nombre</th><th>Registrado</th><th>Rol</th></tr></thead>
+            <tbody>
+              ${users.map((u) => `
+                <tr>
+                  <td>${u.email}</td>
+                  <td>${u.nombre || ""}</td>
+                  <td>${u.created_at ? new Date(u.created_at).toLocaleDateString() : ""}</td>
+                  <td>
+                    ${u.id === window.Auth.currentUser.uid
+                      ? '<span class="role-badge">tú · ' + u.role + '</span>'
+                      : `<select class="rol-usuario" data-id="${u.id}">
+                          <option value="admin" ${u.role === "admin" ? "selected" : ""}>admin</option>
+                          <option value="usuario" ${u.role === "usuario" ? "selected" : ""}>usuario</option>
+                        </select>`}
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>`}
     </div>`;
+
+  document.getElementById("btn-copiar-invitacion").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(mensajeInvitacion);
+      toast("Invitación copiada al portapapeles", "success");
+    } catch (e) {
+      toast("No se pudo copiar. Copia manualmente desde el campo URL.", "warn");
+    }
+  });
+
+  document.getElementById("btn-abrir-app").addEventListener("click", (ev) => {
+    ev.preventDefault();
+    window.open(appUrl, "_blank");
+  });
 
   el.querySelectorAll(".rol-usuario").forEach((sel) => {
     sel.addEventListener("change", async () => {
-      await supabase.from("usuarios").update({ role: sel.value }).eq("id", sel.dataset.id);
+      const { error } = await supabase.from("usuarios").update({ role: sel.value }).eq("id", sel.dataset.id);
+      if (error) {
+        toast("No se pudo cambiar el rol: " + error.message, "error");
+      } else {
+        toast("Rol actualizado", "success");
+      }
     });
   });
 }
