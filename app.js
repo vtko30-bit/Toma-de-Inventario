@@ -23,6 +23,24 @@ let showCabeceraInventarioForm = false;
 
 let _suppressNextSave = false;
 
+function toast(message, type = "info", duration = 3500) {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+function confirmar(mensaje) {
+  return window.confirm(mensaje);
+}
+
+function puedeEditarCatalogos() {
+  return window.Auth?.isAdmin() === true;
+}
+
 function getTenantId() {
   return window.Auth?.currentUser?.tenantId || "default";
 }
@@ -69,6 +87,7 @@ function calcularStockVisible(producto) {
 }
 
 function render() {
+  renderDashboard();
   renderProductos();
   renderFamilias();
   renderCategorias();
@@ -99,13 +118,136 @@ function setupNav() {
   });
 }
 
+let _charts = {};
+
+function renderDashboard() {
+  const el = document.getElementById("view-dashboard");
+  if (!el) return;
+
+  const totalProductos = state.productos.length;
+  const totalMovimientos = state.movimientos.length;
+  const totalInventarios = state.inventarios.length;
+  const totalBodegas = state.bodegas.length;
+
+  const valorTotal = state.productos.reduce((acc, p) => {
+    const stock = stockBaseProducto(p.id);
+    return acc + Number(p.precio || 0) * stock;
+  }, 0);
+
+  const stockBajo = state.productos.filter((p) => stockBaseProducto(p.id) <= 5).length;
+
+  const ingresos = state.movimientos.filter((m) => m.tipo === "Ingreso").reduce((a, m) => a + Number(m.cantidad || 0), 0);
+  const egresos = state.movimientos.filter((m) => m.tipo === "Egreso").reduce((a, m) => a + Number(m.cantidad || 0), 0);
+
+  const porCategoria = {};
+  state.productos.forEach((p) => {
+    const catNombre = byId(state.categorias, p.categoriaId)?.nombre || "Sin categoría";
+    porCategoria[catNombre] = (porCategoria[catNombre] || 0) + stockBaseProducto(p.id);
+  });
+
+  const ultimos = state.movimientos.slice(-7).reverse();
+
+  const movPorDia = {};
+  state.movimientos.forEach((m) => {
+    const fecha = m.fecha || "Sin fecha";
+    if (!movPorDia[fecha]) movPorDia[fecha] = { ingreso: 0, egreso: 0 };
+    if (m.tipo === "Ingreso") movPorDia[fecha].ingreso += Number(m.cantidad || 0);
+    if (m.tipo === "Egreso") movPorDia[fecha].egreso += Number(m.cantidad || 0);
+  });
+  const fechasOrdenadas = Object.keys(movPorDia).sort().slice(-10);
+
+  el.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">Productos</div><div class="kpi-value">${totalProductos}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Stock bajo (≤5)</div><div class="kpi-value" style="color:${stockBajo > 0 ? "#b91c1c" : "#16a34a"}">${stockBajo}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Valor estimado</div><div class="kpi-value">$${valorTotal.toFixed(2)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Movimientos</div><div class="kpi-value">${totalMovimientos}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Ingresos (cant.)</div><div class="kpi-value" style="color:#16a34a">${ingresos}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Egresos (cant.)</div><div class="kpi-value" style="color:#b91c1c">${egresos}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Tomas de inventario</div><div class="kpi-value">${totalInventarios}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Bodegas</div><div class="kpi-value">${totalBodegas}</div></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="card">
+        <h3>Stock por categoría</h3>
+        <canvas id="chart-categorias" height="180"></canvas>
+      </div>
+      <div class="card">
+        <h3>Movimientos por día</h3>
+        <canvas id="chart-movimientos" height="180"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Últimos movimientos</h3>
+      ${ultimos.length === 0 ? '<p class="empty-state">Aún no hay movimientos registrados.</p>' : `
+      <table>
+        <thead><tr><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Producto</th><th>Cantidad</th></tr></thead>
+        <tbody>
+          ${ultimos.map((m) => `<tr><td>${m.fecha || ""}</td><td>${m.nombre || ""}</td><td>${m.tipo || ""}</td><td>${byId(state.productos, m.productoId)?.nombre || ""}</td><td>${m.cantidad}</td></tr>`).join("")}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+
+  if (window.Chart) {
+    if (_charts.categorias) { _charts.categorias.destroy(); }
+    const ctxCat = document.getElementById("chart-categorias");
+    if (ctxCat) {
+      _charts.categorias = new window.Chart(ctxCat, {
+        type: "doughnut",
+        data: {
+          labels: Object.keys(porCategoria),
+          datasets: [{
+            data: Object.values(porCategoria),
+            backgroundColor: ["#2563eb", "#16a34a", "#ca8a04", "#b91c1c", "#7c3aed", "#0891b2", "#db2777", "#ea580c"]
+          }]
+        },
+        options: { responsive: true, plugins: { legend: { position: "bottom" } } }
+      });
+    }
+
+    if (_charts.movimientos) { _charts.movimientos.destroy(); }
+    const ctxMov = document.getElementById("chart-movimientos");
+    if (ctxMov) {
+      _charts.movimientos = new window.Chart(ctxMov, {
+        type: "bar",
+        data: {
+          labels: fechasOrdenadas,
+          datasets: [
+            {
+              label: "Ingreso",
+              data: fechasOrdenadas.map((f) => movPorDia[f].ingreso),
+              backgroundColor: "#16a34a"
+            },
+            {
+              label: "Egreso",
+              data: fechasOrdenadas.map((f) => movPorDia[f].egreso),
+              backgroundColor: "#b91c1c"
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: "bottom" } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+  }
+}
+
 function renderProductos() {
   const el = document.getElementById("view-productos");
   const familiasOpts = state.familias.map((f) => `<option value="${f.id}">${f.nombre}</option>`).join("");
   const categoriasOpts = state.categorias.map((c) => `<option value="${c.id}">${c.nombre}</option>`).join("");
   const data = editingIds.producto ? byId(state.productos, editingIds.producto) : {};
+  const soloLectura = !puedeEditarCatalogos();
+  const dis = soloLectura ? "disabled" : "";
 
   el.innerHTML = `
+    ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>. Solo administradores pueden modificar productos.</div>' : ""}
     <div class="card">
       <h2>Producto</h2>
       <div class="grid">
@@ -132,9 +274,9 @@ function renderProductos() {
         </label>
       </div>
       <div class="actions">
-        <button id="prod-guardar">Guardar</button>
-        <button id="prod-editar">Editar</button>
-        <button id="prod-eliminar">Eliminar</button>
+        <button id="prod-guardar" ${dis}>Guardar</button>
+        <button id="prod-editar" ${dis}>Editar</button>
+        <button id="prod-eliminar" ${dis}>Eliminar</button>
       </div>
       <p class="small">Para productos procesados, la cantidad base se maneja en gramos.</p>
     </div>
@@ -158,7 +300,7 @@ function renderProductos() {
         </label>
       </div>
       <div class="actions">
-        <button id="receta-agregar">Agregar composición</button>
+        <button id="receta-agregar" ${dis}>Agregar composición</button>
       </div>
       <table>
         <thead><tr><th>Producto procesado</th><th>Insumo normal</th><th>Cantidad</th></tr></thead>
@@ -203,11 +345,12 @@ function renderProductos() {
       familiaId: document.getElementById("prod-familia").value,
       categoriaId: document.getElementById("prod-categoria").value
     };
-    if (!item.id || !item.nombre) return alert("Id y nombre son obligatorios.");
+    if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
     const i = state.productos.findIndex((x) => x.id === item.id);
     if (i >= 0) state.productos[i] = item;
     else state.productos.push(item);
     editingIds.producto = item.id;
+    toast("Producto guardado", "success");
     render();
   });
 
@@ -219,12 +362,14 @@ function renderProductos() {
 
   document.getElementById("prod-eliminar").addEventListener("click", () => {
     const id = document.getElementById("prod-id").value.trim();
+    if (!confirmar("¿Eliminar este producto?")) return;
     state.productos = state.productos.filter((x) => x.id !== id);
     delete state.recetas[id];
     Object.keys(state.recetas).forEach((k) => {
       state.recetas[k] = state.recetas[k].filter((x) => x.normalId !== id);
     });
     editingIds.producto = null;
+    toast("Producto eliminado", "success");
     render();
   });
 
@@ -232,9 +377,10 @@ function renderProductos() {
     const procId = document.getElementById("receta-procesado").value;
     const normalId = document.getElementById("receta-normal").value;
     const cantidad = Number(document.getElementById("receta-cantidad").value || 0);
-    if (!procId || !normalId || cantidad <= 0) return alert("Completa la composición.");
+    if (!procId || !normalId || cantidad <= 0) { toast("Completa la composición", "warn"); return; }
     if (!state.recetas[procId]) state.recetas[procId] = [];
     state.recetas[procId].push({ normalId, cantidad });
+    toast("Composición agregada", "success");
     render();
   });
 }
@@ -243,17 +389,20 @@ function simpleCrudView(containerId, title, keyName, editingKey) {
   const el = document.getElementById(containerId);
   const list = state[keyName];
   const data = editingIds[editingKey] ? byId(list, editingIds[editingKey]) : {};
+  const soloLectura = !puedeEditarCatalogos();
+  const dis = soloLectura ? "disabled" : "";
   el.innerHTML = `
+    ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>.</div>' : ""}
     <div class="card">
       <h2>${title}</h2>
       <div class="grid">
-        <label>Id<input id="${editingKey}-id" value="${data?.id || uid(title.slice(0, 3).toUpperCase())}" /></label>
-        <label>Nombre<input id="${editingKey}-nombre" value="${data?.nombre || ""}" /></label>
+        <label>Id<input id="${editingKey}-id" value="${data?.id || uid(title.slice(0, 3).toUpperCase())}" ${dis} /></label>
+        <label>Nombre<input id="${editingKey}-nombre" value="${data?.nombre || ""}" ${dis} /></label>
       </div>
       <div class="actions">
-        <button id="${editingKey}-guardar">Guardar</button>
-        <button id="${editingKey}-editar">Editar</button>
-        <button id="${editingKey}-eliminar">Eliminar</button>
+        <button id="${editingKey}-guardar" ${dis}>Guardar</button>
+        <button id="${editingKey}-editar" ${dis}>Editar</button>
+        <button id="${editingKey}-eliminar" ${dis}>Eliminar</button>
       </div>
     </div>
     <div class="card">
@@ -278,11 +427,12 @@ function simpleCrudView(containerId, title, keyName, editingKey) {
       id: document.getElementById(`${editingKey}-id`).value.trim(),
       nombre: document.getElementById(`${editingKey}-nombre`).value.trim()
     };
-    if (!item.id || !item.nombre) return alert("Id y nombre son obligatorios.");
+    if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
     const i = list.findIndex((x) => x.id === item.id);
     if (i >= 0) list[i] = item;
     else list.push(item);
     editingIds[editingKey] = item.id;
+    toast(`${title.replace(/s$/, "")} guardada`, "success");
     render();
   });
 
@@ -292,9 +442,11 @@ function simpleCrudView(containerId, title, keyName, editingKey) {
   });
 
   document.getElementById(`${editingKey}-eliminar`).addEventListener("click", () => {
+    if (!confirmar(`¿Eliminar este registro?`)) return;
     const id = document.getElementById(`${editingKey}-id`).value.trim();
     state[keyName] = state[keyName].filter((x) => x.id !== id);
     editingIds[editingKey] = null;
+    toast("Eliminado", "success");
     render();
   });
 }
@@ -310,19 +462,22 @@ function renderCategorias() {
 function renderSucursales() {
   const el = document.getElementById("view-sucursales");
   const data = editingIds.sucursal ? byId(state.sucursales, editingIds.sucursal) : {};
+  const soloLectura = !puedeEditarCatalogos();
+  const dis = soloLectura ? "disabled" : "";
   el.innerHTML = `
+    ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>.</div>' : ""}
     <div class="card">
       <h2>Crear Sucursal</h2>
       <div class="grid">
-        <label>Id<input id="suc-id" value="${data?.id || uid("SUC")}" /></label>
-        <label>Nombre<input id="suc-nombre" value="${data?.nombre || ""}" /></label>
-        <label>Dirección<input id="suc-direccion" value="${data?.direccion || ""}" /></label>
-        <label>Teléfono<input id="suc-telefono" value="${data?.telefono || ""}" /></label>
+        <label>Id<input id="suc-id" value="${data?.id || uid("SUC")}" ${dis} /></label>
+        <label>Nombre<input id="suc-nombre" value="${data?.nombre || ""}" ${dis} /></label>
+        <label>Dirección<input id="suc-direccion" value="${data?.direccion || ""}" ${dis} /></label>
+        <label>Teléfono<input id="suc-telefono" value="${data?.telefono || ""}" ${dis} /></label>
       </div>
       <div class="actions">
-        <button id="suc-guardar">Guardar</button>
-        <button id="suc-editar">Editar</button>
-        <button id="suc-eliminar">Eliminar</button>
+        <button id="suc-guardar" ${dis}>Guardar</button>
+        <button id="suc-editar" ${dis}>Editar</button>
+        <button id="suc-eliminar" ${dis}>Eliminar</button>
       </div>
     </div>
     <div class="card">
@@ -348,11 +503,12 @@ function renderSucursales() {
       direccion: document.getElementById("suc-direccion").value.trim(),
       telefono: document.getElementById("suc-telefono").value.trim()
     };
-    if (!item.id || !item.nombre) return alert("Id y nombre son obligatorios.");
+    if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
     const i = state.sucursales.findIndex((x) => x.id === item.id);
     if (i >= 0) state.sucursales[i] = item;
     else state.sucursales.push(item);
     editingIds.sucursal = item.id;
+    toast("Sucursal guardada", "success");
     render();
   });
 
@@ -362,9 +518,11 @@ function renderSucursales() {
   });
 
   document.getElementById("suc-eliminar").addEventListener("click", () => {
+    if (!confirmar("¿Eliminar esta sucursal?")) return;
     const id = document.getElementById("suc-id").value.trim();
     state.sucursales = state.sucursales.filter((x) => x.id !== id);
     editingIds.sucursal = null;
+    toast("Sucursal eliminada", "success");
     render();
   });
 }
@@ -372,18 +530,21 @@ function renderSucursales() {
 function renderBodegas() {
   const el = document.getElementById("view-bodegas");
   const data = editingIds.bodega ? byId(state.bodegas, editingIds.bodega) : {};
+  const soloLectura = !puedeEditarCatalogos();
+  const dis = soloLectura ? "disabled" : "";
   el.innerHTML = `
+    ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>.</div>' : ""}
     <div class="card">
       <h2>Crear Bodega</h2>
       <div class="grid">
-        <label>Id<input id="bod-id" value="${data?.id || uid("BOD")}" /></label>
-        <label>Nombre<input id="bod-nombre" value="${data?.nombre || ""}" /></label>
-        <label>Sucursal<input id="bod-sucursal" value="${data?.sucursal || ""}" /></label>
+        <label>Id<input id="bod-id" value="${data?.id || uid("BOD")}" ${dis} /></label>
+        <label>Nombre<input id="bod-nombre" value="${data?.nombre || ""}" ${dis} /></label>
+        <label>Sucursal<input id="bod-sucursal" value="${data?.sucursal || ""}" ${dis} /></label>
       </div>
       <div class="actions">
-        <button id="bod-guardar">Guardar</button>
-        <button id="bod-editar">Editar</button>
-        <button id="bod-eliminar">Eliminar</button>
+        <button id="bod-guardar" ${dis}>Guardar</button>
+        <button id="bod-editar" ${dis}>Editar</button>
+        <button id="bod-eliminar" ${dis}>Eliminar</button>
       </div>
     </div>
     <div class="card">
@@ -405,11 +566,12 @@ function renderBodegas() {
       nombre: document.getElementById("bod-nombre").value.trim(),
       sucursal: document.getElementById("bod-sucursal").value.trim()
     };
-    if (!item.id || !item.nombre) return alert("Id y nombre obligatorios.");
+    if (!item.id || !item.nombre) { toast("Id y nombre obligatorios", "warn"); return; }
     const i = state.bodegas.findIndex((x) => x.id === item.id);
     if (i >= 0) state.bodegas[i] = item;
     else state.bodegas.push(item);
     editingIds.bodega = item.id;
+    toast("Bodega guardada", "success");
     render();
   });
   document.getElementById("bod-editar").addEventListener("click", () => {
@@ -417,9 +579,11 @@ function renderBodegas() {
     renderBodegas();
   });
   document.getElementById("bod-eliminar").addEventListener("click", () => {
+    if (!confirmar("¿Eliminar esta bodega?")) return;
     const id = document.getElementById("bod-id").value.trim();
     state.bodegas = state.bodegas.filter((x) => x.id !== id);
     editingIds.bodega = null;
+    toast("Bodega eliminada", "success");
     render();
   });
 }
@@ -445,9 +609,23 @@ function aplicarMovimiento(mov) {
   });
 }
 
+let _movFilter = { fechaDesde: "", fechaHasta: "", tipo: "", productoId: "", nombre: "" };
+
+function aplicarFiltroMovimientos(lista) {
+  return lista.filter((m) => {
+    if (_movFilter.fechaDesde && m.fecha < _movFilter.fechaDesde) return false;
+    if (_movFilter.fechaHasta && m.fecha > _movFilter.fechaHasta) return false;
+    if (_movFilter.tipo && m.tipo !== _movFilter.tipo) return false;
+    if (_movFilter.productoId && m.productoId !== _movFilter.productoId) return false;
+    if (_movFilter.nombre && !(m.nombre || "").toLowerCase().includes(_movFilter.nombre.toLowerCase())) return false;
+    return true;
+  });
+}
+
 function renderMovimientos() {
   const el = document.getElementById("view-movimientos");
   const data = editingIds.movimiento ? byId(state.movimientos, editingIds.movimiento) : {};
+  const movimientosFiltrados = aplicarFiltroMovimientos(state.movimientos);
   el.innerHTML = `
     <div class="card">
       <h2>Movimientos de Mercaderías</h2>
@@ -482,14 +660,57 @@ function renderMovimientos() {
       </div>
     </div>
     <div class="card">
+      <h3>Filtros</h3>
+      <div class="grid">
+        <label>Desde<input type="date" id="filt-mov-desde" value="${_movFilter.fechaDesde}" /></label>
+        <label>Hasta<input type="date" id="filt-mov-hasta" value="${_movFilter.fechaHasta}" /></label>
+        <label>Tipo
+          <select id="filt-mov-tipo">
+            <option value="">--</option>
+            ${["Ingreso", "Egreso", "Traspaso"].map((t) => `<option ${_movFilter.tipo === t ? "selected" : ""}>${t}</option>`).join("")}
+          </select>
+        </label>
+        <label>Producto
+          <select id="filt-mov-producto">
+            <option value="">--</option>
+            ${state.productos.map((p) => `<option value="${p.id}" ${_movFilter.productoId === p.id ? "selected" : ""}>${p.nombre}</option>`).join("")}
+          </select>
+        </label>
+        <label>Nombre<input id="filt-mov-nombre" value="${_movFilter.nombre}" placeholder="Buscar por nombre" /></label>
+      </div>
+      <div class="actions">
+        <button id="filt-mov-aplicar">Aplicar</button>
+        <button id="filt-mov-limpiar">Limpiar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Movimientos (${movimientosFiltrados.length}${movimientosFiltrados.length !== state.movimientos.length ? ` de ${state.movimientos.length}` : ""})</h3>
+      ${movimientosFiltrados.length === 0 ? '<p class="empty-state">No hay movimientos que coincidan con los filtros.</p>' : `
       <table>
         <thead><tr><th>Id</th><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Sucursal</th><th>Producto</th><th>Cantidad</th></tr></thead>
         <tbody>
-          ${state.movimientos.map((m) => `<tr data-id="${m.id}" class="row-mov"><td>${m.id}</td><td>${m.fecha}</td><td>${m.nombre}</td><td>${m.tipo}</td><td>${m.sucursal}</td><td>${byId(state.productos, m.productoId)?.nombre || ""}</td><td>${m.cantidad}</td></tr>`).join("")}
+          ${movimientosFiltrados.map((m) => `<tr data-id="${m.id}" class="row-mov" style="cursor:pointer;"><td>${m.id}</td><td>${m.fecha}</td><td>${m.nombre}</td><td>${m.tipo}</td><td>${m.sucursal}</td><td>${byId(state.productos, m.productoId)?.nombre || ""}</td><td>${m.cantidad}</td></tr>`).join("")}
         </tbody>
-      </table>
+      </table>`}
     </div>
   `;
+
+  document.getElementById("filt-mov-aplicar").addEventListener("click", () => {
+    _movFilter = {
+      fechaDesde: document.getElementById("filt-mov-desde").value,
+      fechaHasta: document.getElementById("filt-mov-hasta").value,
+      tipo: document.getElementById("filt-mov-tipo").value,
+      productoId: document.getElementById("filt-mov-producto").value,
+      nombre: document.getElementById("filt-mov-nombre").value.trim()
+    };
+    renderMovimientos();
+  });
+
+  document.getElementById("filt-mov-limpiar").addEventListener("click", () => {
+    _movFilter = { fechaDesde: "", fechaHasta: "", tipo: "", productoId: "", nombre: "" };
+    renderMovimientos();
+  });
 
   document.querySelectorAll(".row-mov").forEach((r) => r.addEventListener("click", () => {
     editingIds.movimiento = r.dataset.id;
@@ -499,7 +720,7 @@ function renderMovimientos() {
   document.getElementById("mov-guardar").addEventListener("click", () => {
     const productoId = document.getElementById("mov-producto").value;
     const prod = byId(state.productos, productoId);
-    if (!prod) return alert("Selecciona un producto.");
+    if (!prod) { toast("Selecciona un producto", "warn"); return; }
     const cantidad = Number(document.getElementById("mov-cantidad").value || 0);
     const cantidadBase = prod.tipo === "Normal" ? cantidad : cantidad;
     const mov = {
@@ -513,7 +734,7 @@ function renderMovimientos() {
       cantidad,
       cantidadBase
     };
-    if (!mov.id || !mov.fecha || !mov.nombre) return alert("Completa datos obligatorios.");
+    if (!mov.id || !mov.fecha || !mov.nombre) { toast("Completa datos obligatorios", "warn"); return; }
     const i = state.movimientos.findIndex((x) => x.id === mov.id);
     if (i >= 0) state.movimientos[i] = mov;
     else {
@@ -521,6 +742,7 @@ function renderMovimientos() {
       aplicarMovimiento(mov);
     }
     editingIds.movimiento = mov.id;
+    toast("Movimiento guardado", "success");
     render();
   });
   document.getElementById("mov-editar").addEventListener("click", () => {
@@ -528,9 +750,11 @@ function renderMovimientos() {
     renderMovimientos();
   });
   document.getElementById("mov-eliminar").addEventListener("click", () => {
+    if (!confirmar("¿Eliminar este movimiento?")) return;
     const id = document.getElementById("mov-id").value.trim();
     state.movimientos = state.movimientos.filter((x) => x.id !== id);
     editingIds.movimiento = null;
+    toast("Movimiento eliminado", "success");
     render();
   });
 }
@@ -625,26 +849,27 @@ function renderInventarios() {
           fecha: document.getElementById("inv-fecha").value,
           detalles: data?.detalles || []
         };
-        if (!item.id || !item.nombre) return alert("Id y nombre son obligatorios.");
+        if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
         const i = state.inventarios.findIndex((x) => x.id === item.id);
         if (i >= 0) state.inventarios[i] = item;
         else state.inventarios.push(item);
         editingIds.inventario = item.id;
         showDetalleInventarioForm = true;
         saveData();
+        toast("Cabecera guardada. Ahora agrega productos.", "success");
         renderInventarios();
       });
     }
 
     if (showDetalleInventarioForm) {
       const agregarProducto = () => {
-        if (!editingIds.inventario) return alert("No hay un inventario activo.");
+        if (!editingIds.inventario) { toast("No hay un inventario activo", "warn"); return; }
         const inv = byId(state.inventarios, editingIds.inventario);
         if (!inv) return;
         const productoId = document.getElementById("det-prod").value;
         const cantidad = Number(document.getElementById("det-cantidad").value || 0);
         const unidad = document.getElementById("det-um").value.trim();
-        if (!productoId) return alert("Selecciona producto.");
+        if (!productoId) { toast("Selecciona producto", "warn"); return; }
         if (!inv.detalles) inv.detalles = [];
         if (editingIds.detalleInventario) {
           const idx = inv.detalles.findIndex((d) => d.id === editingIds.detalleInventario);
@@ -845,7 +1070,9 @@ function setupAuthUI() {
     aplicarModo();
   });
 
-  submit.addEventListener("click", async () => {
+  const form = document.getElementById("auth-form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
     errorEl.textContent = "";
     const email = document.getElementById("auth-email").value.trim();
     const password = document.getElementById("auth-password").value;
@@ -853,19 +1080,31 @@ function setupAuthUI() {
       errorEl.textContent = "Correo y contraseña son obligatorios.";
       return;
     }
+    if (modoRegistro && password.length < 6) {
+      errorEl.textContent = "La contraseña debe tener al menos 6 caracteres.";
+      return;
+    }
     try {
       submit.disabled = true;
+      submit.textContent = modoRegistro ? "Registrando..." : "Entrando...";
       if (modoRegistro) {
         const nombre = document.getElementById("auth-nombre").value.trim();
         const empresa = document.getElementById("auth-empresa").value.trim();
+        if (!empresa) {
+          errorEl.textContent = "Indica el nombre de tu empresa.";
+          return;
+        }
         await window.Auth.register({ email, password, nombre, empresa });
+        toast("Cuenta creada. ¡Bienvenido!", "success");
       } else {
         await window.Auth.login({ email, password });
+        toast("Bienvenido de vuelta", "success");
       }
     } catch (e) {
       errorEl.textContent = e.message || "Ocurrió un error al autenticar.";
     } finally {
       submit.disabled = false;
+      aplicarModo();
     }
   });
 

@@ -16,22 +16,24 @@
 </head>
 <body>
   <div id="auth-screen" class="auth-screen">
-    <div class="auth-card">
+    <form id="auth-form" class="auth-card" autocomplete="on">
       <h2 id="auth-title">Iniciar sesión</h2>
       <p class="small" id="auth-mode-label"></p>
       <div id="auth-fields-register" style="display:none;">
-        <label>Nombre completo<input id="auth-nombre" /></label>
-        <label>Empresa<input id="auth-empresa" placeholder="Ej. Mi Negocio" /></label>
+        <label>Nombre completo<input id="auth-nombre" autocomplete="name" /></label>
+        <label>Empresa<input id="auth-empresa" placeholder="Ej. Mi Negocio" autocomplete="organization" /></label>
       </div>
-      <label>Correo<input type="email" id="auth-email" /></label>
-      <label>Contraseña<input type="password" id="auth-password" /></label>
+      <label>Correo<input type="email" id="auth-email" autocomplete="email" required /></label>
+      <label>Contraseña<input type="password" id="auth-password" autocomplete="current-password" required minlength="6" /></label>
       <p id="auth-error" class="auth-error"></p>
       <div class="actions">
-        <button id="auth-submit">Entrar</button>
-        <button id="auth-toggle" class="btn-link">Crear cuenta</button>
+        <button type="submit" id="auth-submit">Entrar</button>
+        <button type="button" id="auth-toggle" class="btn-link">Crear cuenta</button>
       </div>
-    </div>
+    </form>
   </div>
+
+  <div id="toast-container"></div>
 
   <div id="app-shell" style="display:none;">
     <header class="topbar">
@@ -57,18 +59,20 @@
 
     <main class="layout">
       <nav class="sidebar">
-        <button class="nav-btn active" data-view="productos">Productos</button>
-        <button class="nav-btn" data-view="familias">Familias</button>
-        <button class="nav-btn" data-view="categorias">Categorías</button>
-        <button class="nav-btn" data-view="sucursales">Sucursales</button>
-        <button class="nav-btn" data-view="bodegas">Bodegas</button>
+        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="productos">Productos</button>
+        <button class="nav-btn" data-view="familias" data-admin-only="true">Familias</button>
+        <button class="nav-btn" data-view="categorias" data-admin-only="true">Categorías</button>
+        <button class="nav-btn" data-view="sucursales" data-admin-only="true">Sucursales</button>
+        <button class="nav-btn" data-view="bodegas" data-admin-only="true">Bodegas</button>
         <button class="nav-btn" data-view="movimientos">Movimientos de inventario</button>
         <button class="nav-btn" data-view="inventarios">Toma de Inventario</button>
         <button class="nav-btn" data-view="usuarios" data-admin-only="true">Usuarios</button>
       </nav>
 
       <section class="content">
-        <article id="view-productos" class="view active"></article>
+        <article id="view-dashboard" class="view active"></article>
+        <article id="view-productos" class="view"></article>
         <article id="view-familias" class="view"></article>
         <article id="view-categorias" class="view"></article>
         <article id="view-sucursales" class="view"></article>
@@ -81,6 +85,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="supabase-config.js"></script>
   <script src="auth.js"></script>
   <script src="data.js"></script>
