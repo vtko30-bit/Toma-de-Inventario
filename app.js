@@ -1070,6 +1070,11 @@ function setupAuthUI() {
     aplicarModo();
   });
 
+  function resetSubmitButton() {
+    submit.disabled = false;
+    submit.textContent = modoRegistro ? "Registrarme" : "Entrar";
+  }
+
   const form = document.getElementById("auth-form");
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -1084,16 +1089,27 @@ function setupAuthUI() {
       errorEl.textContent = "La contraseña debe tener al menos 6 caracteres.";
       return;
     }
+    if (modoRegistro) {
+      const empresa = document.getElementById("auth-empresa").value.trim();
+      if (!empresa) {
+        errorEl.textContent = "Indica el nombre de tu empresa.";
+        return;
+      }
+    }
+
+    submit.disabled = true;
+    submit.textContent = modoRegistro ? "Registrando..." : "Entrando...";
+
+    const timeoutId = setTimeout(() => {
+      console.warn("Auth timeout - resetting button");
+      errorEl.textContent = "La operación está tardando demasiado. Verifica tu conexión y vuelve a intentar.";
+      resetSubmitButton();
+    }, 12000);
+
     try {
-      submit.disabled = true;
-      submit.textContent = modoRegistro ? "Registrando..." : "Entrando...";
       if (modoRegistro) {
         const nombre = document.getElementById("auth-nombre").value.trim();
         const empresa = document.getElementById("auth-empresa").value.trim();
-        if (!empresa) {
-          errorEl.textContent = "Indica el nombre de tu empresa.";
-          return;
-        }
         await window.Auth.register({ email, password, nombre, empresa });
         toast("Cuenta creada. ¡Bienvenido!", "success");
       } else {
@@ -1101,23 +1117,30 @@ function setupAuthUI() {
         toast("Bienvenido de vuelta", "success");
       }
     } catch (e) {
+      console.error("Auth error:", e);
       errorEl.textContent = e.message || "Ocurrió un error al autenticar.";
+      toast(e.message || "Error de autenticación", "error");
     } finally {
-      submit.disabled = false;
-      aplicarModo();
+      clearTimeout(timeoutId);
+      resetSubmitButton();
     }
   });
 
   window.Auth.onChange(async (user) => {
-    if (user) {
-      screen.style.display = "none";
-      shell.style.display = "";
-      document.getElementById("userInfo").innerHTML = `${user.nombre || user.email}<br><small>${user.email}</small><span class="role-badge">${user.role}</span>`;
-      aplicarVisibilidadAdmin();
-      await window.DataLayer.load(user.tenantId);
-    } else {
-      shell.style.display = "none";
-      screen.style.display = "";
+    try {
+      if (user) {
+        screen.style.display = "none";
+        shell.style.display = "";
+        document.getElementById("userInfo").innerHTML = `${user.nombre || user.email}<br><small>${user.email}</small><span class="role-badge">${user.role}</span>`;
+        aplicarVisibilidadAdmin();
+        await window.DataLayer.load(user.tenantId);
+      } else {
+        shell.style.display = "none";
+        screen.style.display = "";
+      }
+    } catch (e) {
+      console.error("Error en onChange auth:", e);
+      toast("Error cargando datos: " + (e.message || e), "error");
     }
   });
 
