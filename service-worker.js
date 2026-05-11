@@ -1,9 +1,12 @@
-const CACHE_NAME = "inventario-cache-v1";
+const CACHE_NAME = "inventario-cache-v3";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./auth.js",
+  "./data.js",
+  "./supabase-config.js",
   "./manifest.json",
   "./icons/icon.svg",
   "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
@@ -27,20 +30,24 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
 
-  if (req.url.includes("firestore.googleapis.com") || req.url.includes("identitytoolkit.googleapis.com")) {
+  if (
+    req.url.includes("supabase.co") ||
+    req.url.includes("esm.sh") ||
+    req.url.includes("firestore.googleapis.com") ||
+    req.url.includes("identitytoolkit.googleapis.com")
+  ) {
     return;
   }
 
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const fetchPromise = fetch(req).then((response) => {
+    fetch(req)
+      .then((response) => {
         if (response && response.status === 200 && response.type === "basic") {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
         }
         return response;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    })
+      })
+      .catch(() => caches.match(req))
   );
 });
