@@ -347,10 +347,11 @@ function renderProductos() {
     };
     if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
     const i = state.productos.findIndex((x) => x.id === item.id);
-    if (i >= 0) state.productos[i] = item;
+    const editaba = i >= 0;
+    if (editaba) state.productos[i] = item;
     else state.productos.push(item);
-    editingIds.producto = item.id;
-    toast("Producto guardado", "success");
+    editingIds.producto = null;
+    toast(editaba ? "Producto actualizado" : "Producto creado", "success");
     render();
   });
 
@@ -429,10 +430,11 @@ function simpleCrudView(containerId, title, keyName, editingKey) {
     };
     if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
     const i = list.findIndex((x) => x.id === item.id);
-    if (i >= 0) list[i] = item;
+    const editaba = i >= 0;
+    if (editaba) list[i] = item;
     else list.push(item);
-    editingIds[editingKey] = item.id;
-    toast(`${title.replace(/s$/, "")} guardada`, "success");
+    editingIds[editingKey] = null;
+    toast(`${title.replace(/s$/, "")} ${editaba ? "actualizada" : "creada"}`, "success");
     render();
   });
 
@@ -505,10 +507,11 @@ function renderSucursales() {
     };
     if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
     const i = state.sucursales.findIndex((x) => x.id === item.id);
-    if (i >= 0) state.sucursales[i] = item;
+    const editaba = i >= 0;
+    if (editaba) state.sucursales[i] = item;
     else state.sucursales.push(item);
-    editingIds.sucursal = item.id;
-    toast("Sucursal guardada", "success");
+    editingIds.sucursal = null;
+    toast(`Sucursal ${editaba ? "actualizada" : "creada"}`, "success");
     render();
   });
 
@@ -568,10 +571,11 @@ function renderBodegas() {
     };
     if (!item.id || !item.nombre) { toast("Id y nombre obligatorios", "warn"); return; }
     const i = state.bodegas.findIndex((x) => x.id === item.id);
-    if (i >= 0) state.bodegas[i] = item;
+    const editaba = i >= 0;
+    if (editaba) state.bodegas[i] = item;
     else state.bodegas.push(item);
-    editingIds.bodega = item.id;
-    toast("Bodega guardada", "success");
+    editingIds.bodega = null;
+    toast(`Bodega ${editaba ? "actualizada" : "creada"}`, "success");
     render();
   });
   document.getElementById("bod-editar").addEventListener("click", () => {
@@ -736,13 +740,14 @@ function renderMovimientos() {
     };
     if (!mov.id || !mov.fecha || !mov.nombre) { toast("Completa datos obligatorios", "warn"); return; }
     const i = state.movimientos.findIndex((x) => x.id === mov.id);
-    if (i >= 0) state.movimientos[i] = mov;
+    const editaba = i >= 0;
+    if (editaba) state.movimientos[i] = mov;
     else {
       state.movimientos.push(mov);
       aplicarMovimiento(mov);
     }
-    editingIds.movimiento = mov.id;
-    toast("Movimiento guardado", "success");
+    editingIds.movimiento = null;
+    toast(`Movimiento ${editaba ? "actualizado" : "creado"}`, "success");
     render();
   });
   document.getElementById("mov-editar").addEventListener("click", () => {
