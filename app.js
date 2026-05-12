@@ -535,14 +535,23 @@ function renderBodegas() {
   const data = editingIds.bodega ? byId(state.bodegas, editingIds.bodega) : {};
   const soloLectura = !puedeEditarCatalogos();
   const dis = soloLectura ? "disabled" : "";
+  const sinSucursales = state.sucursales.length === 0;
+  const sucursalIdActual = data?.sucursalId || "";
+
   el.innerHTML = `
     ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>.</div>' : ""}
+    ${sinSucursales && !soloLectura ? '<div class="read-only-banner">Aún no hay sucursales creadas. Crea al menos una sucursal antes de crear bodegas.</div>' : ""}
     <div class="card">
       <h2>Crear Bodega</h2>
       <div class="grid">
         <label>Id<input id="bod-id" value="${data?.id || uid("BOD")}" ${dis} /></label>
         <label>Nombre<input id="bod-nombre" value="${data?.nombre || ""}" ${dis} /></label>
-        <label>Sucursal<input id="bod-sucursal" value="${data?.sucursal || ""}" ${dis} /></label>
+        <label>Sucursal
+          <select id="bod-sucursal" ${dis}>
+            <option value="">Seleccionar sucursal...</option>
+            ${state.sucursales.map((s) => `<option value="${s.id}" ${sucursalIdActual === s.id ? "selected" : ""}>${s.nombre}</option>`).join("")}
+          </select>
+        </label>
       </div>
       <div class="actions">
         <button id="bod-guardar" ${dis}>Guardar</button>
@@ -554,7 +563,10 @@ function renderBodegas() {
       <table>
         <thead><tr><th>Id</th><th>Nombre</th><th>Sucursal</th></tr></thead>
         <tbody>
-          ${state.bodegas.map((x) => `<tr class="row-bodega" data-id="${x.id}"><td>${x.id}</td><td>${x.nombre}</td><td>${x.sucursal}</td></tr>`).join("")}
+          ${state.bodegas.map((x) => {
+            const nombreSucursal = byId(state.sucursales, x.sucursalId)?.nombre || x.sucursal || "—";
+            return `<tr class="row-bodega" data-id="${x.id}" style="cursor:pointer;"><td>${x.id}</td><td>${x.nombre}</td><td>${nombreSucursal}</td></tr>`;
+          }).join("")}
         </tbody>
       </table>
     </div>
@@ -564,12 +576,16 @@ function renderBodegas() {
     renderBodegas();
   }));
   document.getElementById("bod-guardar").addEventListener("click", () => {
+    const sucursalId = document.getElementById("bod-sucursal").value;
+    const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
     const item = {
       id: document.getElementById("bod-id").value.trim(),
       nombre: document.getElementById("bod-nombre").value.trim(),
-      sucursal: document.getElementById("bod-sucursal").value.trim()
+      sucursalId,
+      sucursal: sucursalNombre
     };
     if (!item.id || !item.nombre) { toast("Id y nombre obligatorios", "warn"); return; }
+    if (!sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
     const i = state.bodegas.findIndex((x) => x.id === item.id);
     const editaba = i >= 0;
     if (editaba) state.bodegas[i] = item;
