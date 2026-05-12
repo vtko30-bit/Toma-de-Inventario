@@ -1173,7 +1173,15 @@ function setupUserMenu() {
   });
   document.getElementById("btnLogout").addEventListener("click", async () => {
     menu.classList.remove("open");
-    await window.Auth.logout();
+    try {
+      if (window.DataLayer && typeof window.DataLayer._cleanup === "function") {
+        await window.DataLayer._cleanup();
+      }
+      await window.Auth.logout();
+    } catch (e) {
+      console.warn("Error al cerrar sesión:", e);
+    }
+    window.location.reload();
   });
 }
 

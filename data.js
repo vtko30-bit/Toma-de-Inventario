@@ -51,9 +51,15 @@ const DataLayer = {
   async _cleanup() {
     if (window.SUPABASE_ENABLED && window.__SB__) {
       const { supabase } = window.__SB__;
-      for (const ch of this._channels) {
-        try { await supabase.removeChannel(ch); } catch (e) {}
-      }
+      const promesas = this._channels.map((ch) =>
+        Promise.resolve(supabase.removeChannel(ch)).catch(() => {})
+      );
+      try {
+        await Promise.race([
+          Promise.all(promesas),
+          new Promise((resolve) => setTimeout(resolve, 2000))
+        ]);
+      } catch (e) {}
     }
     this._channels = [];
   },
@@ -78,24 +84,29 @@ const DataLayer = {
     const { supabase } = window.__SB__;
     this._state = this._emptyState();
 
-    for (const col of COLLECTIONS) {
-      const { data, error } = await supabase
-        .from(col)
-        .select("id,data")
-        .eq("tenant_id", tenantId);
-      if (!error && data) {
-        this._state[col] = data.map((r) => ({ id: r.id, ...(r.data || {}) }));
-      }
-    }
+    const timeoutQuery = (p) =>
+      Promise.race([
+        p,
+        new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: "timeout" } }), 8000))
+      ]);
 
-    const { data: recetasRow } = await supabase
-      .from("config")
-      .select("data")
-      .eq("tenant_id", tenantId)
-      .eq("key", "recetas")
-      .maybeSingle();
-    this._state.recetas = recetasRow?.data || {};
+    const tareasColecciones = COLLECTIONS.map((col) =>
+      timeoutQuery(supabase.from(col).select("id,data").eq("tenant_id", tenantId)).then(({ data, error }) => {
+        if (!error && data) {
+          this._state[col] = data.map((r) => ({ id: r.id, ...(r.data || {}) }));
+        } else if (error) {
+          console.warn(`Error cargando ${col}:`, error.message);
+        }
+      })
+    );
 
+    const tareaRecetas = timeoutQuery(
+      supabase.from("config").select("data").eq("tenant_id", tenantId).eq("key", "recetas").maybeSingle()
+    ).then(({ data, error }) => {
+      if (!error) this._state.recetas = data?.data || {};
+    });
+
+    await Promise.all([...tareasColecciones, tareaRecetas]);
     this._emit();
 
     for (const col of COLLECTIONS) {

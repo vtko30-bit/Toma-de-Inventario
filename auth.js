@@ -5,6 +5,13 @@
 const LOCAL_USERS_KEY = "inventario_app_users_v1";
 const LOCAL_SESSION_KEY = "inventario_app_session_v1";
 
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`Tiempo de espera agotado en ${label}. Revisa tu conexión a internet.`)), ms))
+  ]);
+}
+
 const Auth = {
   currentUser: null,
   listeners: [],
@@ -34,11 +41,21 @@ const Auth = {
     window.__SB__ = { supabase };
 
     supabase.auth.onAuthStateChange(async (_event, session) => {
-      await this._loadProfile(session?.user || null);
+      try {
+        await this._loadProfile(session?.user || null);
+      } catch (e) {
+        console.warn("loadProfile error:", e);
+      }
     });
 
-    const { data } = await supabase.auth.getSession();
-    await this._loadProfile(data?.session?.user || null);
+    try {
+      const { data } = await withTimeout(supabase.auth.getSession(), 5000, "getSession");
+      await this._loadProfile(data?.session?.user || null);
+    } catch (e) {
+      console.warn("Init session error:", e);
+      this.currentUser = null;
+      this._emit();
+    }
   },
 
   async _loadProfile(authUser) {
@@ -48,11 +65,17 @@ const Auth = {
       return;
     }
     const { supabase } = window.__SB__;
-    const { data: profile } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("id", authUser.id)
-      .maybeSingle();
+    let profile = null;
+    try {
+      const res = await withTimeout(
+        supabase.from("usuarios").select("*").eq("id", authUser.id).maybeSingle(),
+        5000,
+        "perfil"
+      );
+      profile = res?.data || null;
+    } catch (e) {
+      console.warn("Error cargando perfil, usando defaults:", e);
+    }
 
     this.currentUser = {
       uid: authUser.id,
@@ -137,7 +160,11 @@ const Auth = {
   async login({ email, password }) {
     if (window.SUPABASE_ENABLED) {
       const { supabase } = window.__SB__;
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        10000,
+        "login"
+      );
       if (error) throw error;
       return data.user;
     }
