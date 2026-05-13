@@ -8,6 +8,7 @@ const DataLayer = {
   _channels: [],
   _onChange: null,
   _tenantId: null,
+  loadFailed: false,
 
   _emptyState() {
     return {
@@ -82,6 +83,7 @@ const DataLayer = {
   async _loadSupabase(tenantId) {
     const { supabase } = window.__SB__;
     this._state = this._emptyState();
+    this.loadFailed = false;
 
     const timeoutQuery = (p) =>
       Promise.race([
@@ -89,12 +91,14 @@ const DataLayer = {
         new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: "timeout" } }), 8000))
       ]);
 
+    const errores = [];
     const tareasColecciones = COLLECTIONS.map((col) =>
       timeoutQuery(supabase.from(col).select("id,data").eq("tenant_id", tenantId)).then(({ data, error }) => {
         if (!error && data) {
           this._state[col] = data.map((r) => ({ id: r.id, ...(r.data || {}) }));
         } else if (error) {
           console.warn(`Error cargando ${col}:`, error.message);
+          errores.push(`${col}: ${error.message}`);
         }
       })
     );
@@ -106,6 +110,10 @@ const DataLayer = {
     });
 
     await Promise.all([...tareasColecciones, tareaRecetas]);
+    if (errores.length) {
+      this.loadFailed = true;
+      console.error("Carga parcial; bloqueando guardado para no perder datos:", errores);
+    }
     this._emit();
 
     const sufijo = Math.random().toString(36).slice(2, 10);
@@ -160,7 +168,17 @@ const DataLayer = {
     if (window.SUPABASE_ENABLED) {
       const { supabase } = window.__SB__;
       const { id, ...rest } = item;
-      await supabase.from(collection).upsert({ id, tenant_id: tenantId, data: rest });
+      const { error } = await supabase
+        .from(collection)
+        .upsert({ id, tenant_id: tenantId, data: rest }, { onConflict: "tenant_id,id" });
+      if (error) {
+        console.error(`save(${collection}) error:`, error);
+        throw new Error(error.message || `Error guardando en ${collection}`);
+      }
+      const arr = this._state[collection] || [];
+      const idx = arr.findIndex((x) => x.id === item.id);
+      if (idx >= 0) arr[idx] = item; else arr.push(item);
+      this._state[collection] = arr;
       return;
     }
     const arr = this._state[collection] || [];
@@ -175,7 +193,16 @@ const DataLayer = {
   async remove(tenantId, collection, id) {
     if (window.SUPABASE_ENABLED) {
       const { supabase } = window.__SB__;
-      await supabase.from(collection).delete().eq("id", id).eq("tenant_id", tenantId);
+      const { error } = await supabase
+        .from(collection)
+        .delete()
+        .eq("id", id)
+        .eq("tenant_id", tenantId);
+      if (error) {
+        console.error(`remove(${collection}) error:`, error);
+        throw new Error(error.message || `Error eliminando de ${collection}`);
+      }
+      this._state[collection] = (this._state[collection] || []).filter((x) => x.id !== id);
       return;
     }
     this._state[collection] = (this._state[collection] || []).filter((x) => x.id !== id);
@@ -186,11 +213,17 @@ const DataLayer = {
   async saveRecetas(tenantId, recetas) {
     if (window.SUPABASE_ENABLED) {
       const { supabase } = window.__SB__;
-      await supabase.from("config").upsert({
-        tenant_id: tenantId,
-        key: "recetas",
-        data: recetas
-      });
+      const { error } = await supabase
+        .from("config")
+        .upsert(
+          { tenant_id: tenantId, key: "recetas", data: recetas },
+          { onConflict: "tenant_id,key" }
+        );
+      if (error) {
+        console.error("saveRecetas error:", error);
+        throw new Error(error.message || "Error guardando recetas");
+      }
+      this._state.recetas = recetas;
       return;
     }
     this._state.recetas = recetas;
@@ -202,30 +235,44 @@ const DataLayer = {
     this._state[collection] = items;
     if (window.SUPABASE_ENABLED) {
       const { supabase } = window.__SB__;
-      const { data: existing } = await supabase
+      const { data: existing, error: selErr } = await supabase
         .from(collection)
         .select("id")
         .eq("tenant_id", tenantId);
+      if (selErr) {
+        console.error(`replaceCollection(${collection}) select error:`, selErr);
+        throw new Error(selErr.message || `Error leyendo ${collection}`);
+      }
       const existingIds = (existing || []).map((r) => r.id);
       const newIds = items.map((i) => i.id);
       const toDelete = existingIds.filter((id) => !newIds.includes(id));
       if (toDelete.length) {
-        await supabase
+        const { error: delErr } = await supabase
           .from(collection)
           .delete()
           .eq("tenant_id", tenantId)
           .in("id", toDelete);
+        if (delErr) {
+          console.error(`replaceCollection(${collection}) delete error:`, delErr);
+          throw new Error(delErr.message || `Error borrando filas de ${collection}`);
+        }
       }
       if (items.length) {
         const rows = items.map((it) => {
           const { id, ...rest } = it;
           return { id, tenant_id: tenantId, data: rest };
         });
-        await supabase.from(collection).upsert(rows);
+        const { error: upErr } = await supabase
+          .from(collection)
+          .upsert(rows, { onConflict: "tenant_id,id" });
+        if (upErr) {
+          console.error(`replaceCollection(${collection}) upsert error:`, upErr);
+          throw new Error(upErr.message || `Error guardando ${collection}`);
+        }
       }
-    } else {
-      this._saveLocal(tenantId);
+      return;
     }
+    this._saveLocal(tenantId);
     this._emit();
   }
 };

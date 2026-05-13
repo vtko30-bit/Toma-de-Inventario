@@ -22,6 +22,7 @@ let showDetalleInventarioForm = false;
 let showCabeceraInventarioForm = false;
 
 let _suppressNextSave = false;
+let _saving = false;
 
 function toast(message, type = "info", duration = 3500) {
   const container = document.getElementById("toast-container");
@@ -45,7 +46,7 @@ function getTenantId() {
   return window.Auth?.currentUser?.tenantId || "default";
 }
 
-function saveData() {
+async function saveData() {
   if (_suppressNextSave) {
     _suppressNextSave = false;
     return;
@@ -53,9 +54,22 @@ function saveData() {
   if (!window.Auth?.currentUser) return;
   const tenantId = getTenantId();
   if (window.SUPABASE_ENABLED) {
+    if (_saving) return;
+    if (window.DataLayer.loadFailed) {
+      toast("La carga inicial falló. Refresca la página antes de guardar para evitar perder datos.", "error", 6000);
+      return;
+    }
+    _saving = true;
     const colecciones = ["productos", "familias", "categorias", "sucursales", "bodegas", "movimientos", "inventarios"];
-    colecciones.forEach((c) => window.DataLayer.replaceCollection(tenantId, c, state[c] || []));
-    window.DataLayer.saveRecetas(tenantId, state.recetas || {});
+    try {
+      await Promise.all(colecciones.map((c) => window.DataLayer.replaceCollection(tenantId, c, state[c] || [])));
+      await window.DataLayer.saveRecetas(tenantId, state.recetas || {});
+    } catch (e) {
+      console.error("Error guardando datos:", e);
+      toast("Error al guardar: " + (e.message || e), "error", 5000);
+    } finally {
+      _saving = false;
+    }
   } else {
     window.DataLayer._state = state;
     window.DataLayer._saveLocal(tenantId);
