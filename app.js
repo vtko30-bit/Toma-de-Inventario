@@ -25,6 +25,17 @@ let _suppressNextSave = false;
 let _saving = false;
 let _renderTimer = null;
 
+const TIPOS_EMPAQUE = ["Unidad", "Caja", "Saco", "Tarro", "Bolsa", "Botella", "Pack", "Otro"];
+
+function describirEmpaque(prod) {
+  if (!prod) return "";
+  const tipo = prod.tipoEmpaque || "Unidad";
+  const upe = Number(prod.unidadesPorEmpaque || 1);
+  if (tipo === "Unidad" || upe <= 1) return tipo;
+  const um = prod.unidad || "";
+  return `${tipo} de ${upe}${um ? " " + um.toLowerCase() : ""}`;
+}
+
 function _hayInputEnfocado() {
   const el = document.activeElement;
   if (!el) return false;
@@ -302,6 +313,14 @@ function renderProductos() {
             <option ${data?.tipo !== "Procesado" ? "selected" : ""}>Normal</option>
           </select>
         </label>
+        <label>Tipo de Empaque
+          <select id="prod-empaque">
+            ${TIPOS_EMPAQUE.map((e) => `<option ${(data?.tipoEmpaque || "Unidad") === e ? "selected" : ""}>${e}</option>`).join("")}
+          </select>
+        </label>
+        <label>Unidades por empaque
+          <input type="number" id="prod-upe" min="1" step="1" value="${data?.unidadesPorEmpaque || 1}" />
+        </label>
         <label>Familia
           <select id="prod-familia"><option value="">--</option>${familiasOpts}</select>
         </label>
@@ -352,9 +371,9 @@ function renderProductos() {
     <div class="card">
       <h3>Lista de productos</h3>
       <table>
-        <thead><tr><th>Id</th><th>Nombre</th><th>Precio</th><th>Tipo</th><th>Familia</th><th>Categoría</th><th>Stock</th></tr></thead>
+        <thead><tr><th>Id</th><th>Nombre</th><th>Precio</th><th>Tipo</th><th>Empaque</th><th>Familia</th><th>Categoría</th><th>Stock</th></tr></thead>
         <tbody>
-          ${state.productos.map((p) => `<tr data-id="${p.id}" class="row-producto"><td>${p.id}</td><td>${p.nombre}</td><td>${p.precio}</td><td>${p.tipo}</td><td>${byId(state.familias, p.familiaId)?.nombre || ""}</td><td>${byId(state.categorias, p.categoriaId)?.nombre || ""}</td><td>${calcularStockVisible(p)}</td></tr>`).join("")}
+          ${state.productos.map((p) => `<tr data-id="${p.id}" class="row-producto"><td>${p.id}</td><td>${p.nombre}</td><td>${p.precio}</td><td>${p.tipo}</td><td>${describirEmpaque(p)}</td><td>${byId(state.familias, p.familiaId)?.nombre || ""}</td><td>${byId(state.categorias, p.categoriaId)?.nombre || ""}</td><td>${calcularStockVisible(p)}</td></tr>`).join("")}
         </tbody>
       </table>
     </div>
@@ -371,6 +390,8 @@ function renderProductos() {
   });
 
   document.getElementById("prod-guardar").addEventListener("click", () => {
+    const tipoEmpaque = document.getElementById("prod-empaque").value;
+    const unidadesPorEmpaque = Math.max(1, Number(document.getElementById("prod-upe").value || 1));
     const item = {
       id: document.getElementById("prod-id").value.trim(),
       nombre: document.getElementById("prod-nombre").value.trim(),
@@ -378,6 +399,8 @@ function renderProductos() {
       cantidad: Number(document.getElementById("prod-cantidad").value || 0),
       unidad: document.getElementById("prod-um").value,
       tipo: document.getElementById("prod-tipo").value,
+      tipoEmpaque,
+      unidadesPorEmpaque,
       familiaId: document.getElementById("prod-familia").value,
       categoriaId: document.getElementById("prod-categoria").value
     };
@@ -721,8 +744,19 @@ function renderMovimientos() {
             ${state.productos.map((p) => `<option value="${p.id}" ${data?.productoId === p.id ? "selected" : ""}>${p.nombre}</option>`).join("")}
           </select>
         </label>
+        <label>Empaque
+          <select id="mov-empaque">
+            ${TIPOS_EMPAQUE.map((e) => `<option ${data?.tipoEmpaque === e ? "selected" : ""}>${e}</option>`).join("")}
+          </select>
+        </label>
+        <label>Unidades por empaque<input type="number" id="mov-upe" min="1" step="1" value="${data?.unidadesPorEmpaque || 1}" /></label>
+        <label style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="mov-por-empaques" ${data?.usarEmpaques ? "checked" : ""} style="width:auto;" />
+          Ingresar por empaques
+        </label>
         <label>Cantidad<input type="number" id="mov-cantidad" value="${data?.cantidad ?? 0}" /></label>
       </div>
+      <p class="small" id="mov-empaque-info" style="margin:6px 0 0 0;color:#475569;"></p>
       <div class="actions">
         <button id="mov-guardar">Guardar</button>
         <button id="mov-editar">Editar</button>
@@ -758,9 +792,15 @@ function renderMovimientos() {
       <h3>Movimientos (${movimientosFiltrados.length}${movimientosFiltrados.length !== state.movimientos.length ? ` de ${state.movimientos.length}` : ""})</h3>
       ${movimientosFiltrados.length === 0 ? '<p class="empty-state">No hay movimientos que coincidan con los filtros.</p>' : `
       <table>
-        <thead><tr><th>Id</th><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Sucursal</th><th>Producto</th><th>Cantidad</th></tr></thead>
+        <thead><tr><th>Id</th><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Sucursal</th><th>Producto</th><th>Cantidad</th><th>Empaque</th><th>Total base</th></tr></thead>
         <tbody>
-          ${movimientosFiltrados.map((m) => `<tr data-id="${m.id}" class="row-mov" style="cursor:pointer;"><td>${m.id}</td><td>${m.fecha}</td><td>${m.nombre}</td><td>${m.tipo}</td><td>${m.sucursal}</td><td>${byId(state.productos, m.productoId)?.nombre || ""}</td><td>${m.cantidad}</td></tr>`).join("")}
+          ${movimientosFiltrados.map((m) => {
+            const prod = byId(state.productos, m.productoId);
+            const um = prod?.unidad || "";
+            const empaqueTxt = m.usarEmpaques ? `${m.tipoEmpaque || "Unidad"} × ${m.unidadesPorEmpaque || 1}` : "—";
+            const base = m.cantidadBase ?? m.cantidad;
+            return `<tr data-id="${m.id}" class="row-mov" style="cursor:pointer;"><td>${m.id}</td><td>${m.fecha}</td><td>${m.nombre}</td><td>${m.tipo}</td><td>${m.sucursal || ""}</td><td>${prod?.nombre || ""}</td><td>${m.cantidad}</td><td>${empaqueTxt}</td><td>${base}${um ? " " + um.toLowerCase() : ""}</td></tr>`;
+          }).join("")}
         </tbody>
       </table>`}
     </div>
@@ -797,12 +837,51 @@ function renderMovimientos() {
     });
   }
 
+  function actualizarInfoEmpaque() {
+    const info = document.getElementById("mov-empaque-info");
+    if (!info) return;
+    const prod = byId(state.productos, document.getElementById("mov-producto").value);
+    const usar = document.getElementById("mov-por-empaques").checked;
+    const empaque = document.getElementById("mov-empaque").value;
+    const upe = Math.max(1, Number(document.getElementById("mov-upe").value || 1));
+    const cant = Number(document.getElementById("mov-cantidad").value || 0);
+    if (!prod) { info.textContent = ""; return; }
+    const um = prod.unidad || "unidad";
+    if (usar) {
+      const base = cant * upe;
+      info.textContent = `${cant} ${empaque.toLowerCase()}(s) × ${upe} ${um.toLowerCase()} = ${base} ${um.toLowerCase()}(s) en stock`;
+    } else {
+      info.textContent = `Ingresando ${cant} ${um.toLowerCase()}(s). 1 ${empaque.toLowerCase()} = ${upe} ${um.toLowerCase()}(s).`;
+    }
+  }
+
+  const movProdSel = document.getElementById("mov-producto");
+  if (movProdSel) {
+    movProdSel.addEventListener("change", () => {
+      const prod = byId(state.productos, movProdSel.value);
+      if (prod) {
+        document.getElementById("mov-empaque").value = prod.tipoEmpaque || "Unidad";
+        document.getElementById("mov-upe").value = prod.unidadesPorEmpaque || 1;
+      }
+      actualizarInfoEmpaque();
+    });
+  }
+  ["mov-por-empaques", "mov-empaque", "mov-upe", "mov-cantidad"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", actualizarInfoEmpaque);
+    if (el && el.tagName === "SELECT") el.addEventListener("change", actualizarInfoEmpaque);
+  });
+  actualizarInfoEmpaque();
+
   document.getElementById("mov-guardar").addEventListener("click", () => {
     const productoId = document.getElementById("mov-producto").value;
     const prod = byId(state.productos, productoId);
     if (!prod) { toast("Selecciona un producto", "warn"); return; }
-    const cantidad = Number(document.getElementById("mov-cantidad").value || 0);
-    const cantidadBase = prod.tipo === "Normal" ? cantidad : cantidad;
+    const usarEmpaques = document.getElementById("mov-por-empaques").checked;
+    const tipoEmpaque = document.getElementById("mov-empaque").value;
+    const unidadesPorEmpaque = Math.max(1, Number(document.getElementById("mov-upe").value || 1));
+    const cantidadIngresada = Number(document.getElementById("mov-cantidad").value || 0);
+    const cantidadBase = usarEmpaques ? cantidadIngresada * unidadesPorEmpaque : cantidadIngresada;
     const sucursalId = document.getElementById("mov-sucursal").value;
     const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
     const mov = {
@@ -814,7 +893,10 @@ function renderMovimientos() {
       sucursal: sucursalNombre,
       bodegaId: document.getElementById("mov-bodega").value,
       productoId,
-      cantidad,
+      usarEmpaques,
+      tipoEmpaque,
+      unidadesPorEmpaque,
+      cantidad: cantidadIngresada,
       cantidadBase
     };
     if (!mov.id || !mov.fecha || !mov.nombre) { toast("Completa datos obligatorios", "warn"); return; }
