@@ -23,6 +23,28 @@ let showCabeceraInventarioForm = false;
 
 let _suppressNextSave = false;
 let _saving = false;
+let _renderTimer = null;
+
+function _hayInputEnfocado() {
+  const el = document.activeElement;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
+}
+
+function programarRender() {
+  if (_renderTimer) clearTimeout(_renderTimer);
+  _renderTimer = setTimeout(() => {
+    _renderTimer = null;
+    if (_hayInputEnfocado()) {
+      programarRender();
+      return;
+    }
+    _suppressNextSave = true;
+    render();
+  }, 250);
+}
 
 function toast(message, type = "info", duration = 3500) {
   const container = document.getElementById("toast-container");
@@ -1346,8 +1368,7 @@ async function boot() {
     state.inventarios = nuevoState.inventarios;
     state.recetas = nuevoState.recetas || {};
     if (window.Auth?.currentUser) {
-      _suppressNextSave = true;
-      render();
+      programarRender();
     }
   });
 
