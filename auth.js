@@ -77,11 +77,43 @@ const Auth = {
       console.warn("Error cargando perfil, usando defaults:", e);
     }
 
+    if (!profile) {
+      const meta = authUser.user_metadata || {};
+      const tenantFromMeta = meta.tenant_id || this._toTenant(meta.empresa || authUser.email);
+      try {
+        const { data: inserted, error: insertError } = await withTimeout(
+          supabase
+            .from("usuarios")
+            .upsert(
+              {
+                id: authUser.id,
+                email: authUser.email,
+                nombre: meta.nombre || authUser.email,
+                tenant_id: tenantFromMeta,
+                role: "admin"
+              },
+              { onConflict: "id" }
+            )
+            .select()
+            .maybeSingle(),
+          5000,
+          "crear perfil"
+        );
+        if (insertError) {
+          console.error("No se pudo crear el perfil automáticamente:", insertError);
+        } else {
+          profile = inserted;
+        }
+      } catch (e) {
+        console.warn("Error creando perfil:", e);
+      }
+    }
+
     this.currentUser = {
       uid: authUser.id,
       email: authUser.email,
       nombre: profile?.nombre || authUser.email,
-      tenantId: profile?.tenant_id || authUser.id,
+      tenantId: profile?.tenant_id || (authUser.user_metadata?.tenant_id) || authUser.id,
       role: profile?.role || "admin"
     };
     this._emit();
