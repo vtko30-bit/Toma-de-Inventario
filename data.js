@@ -51,15 +51,14 @@ const DataLayer = {
   async _cleanup() {
     if (window.SUPABASE_ENABLED && window.__SB__) {
       const { supabase } = window.__SB__;
-      const promesas = this._channels.map((ch) =>
-        Promise.resolve(supabase.removeChannel(ch)).catch(() => {})
-      );
       try {
         await Promise.race([
-          Promise.all(promesas),
+          Promise.resolve(supabase.removeAllChannels()).catch(() => {}),
           new Promise((resolve) => setTimeout(resolve, 2000))
         ]);
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Error limpiando canales:", e);
+      }
     }
     this._channels = [];
   },
@@ -109,9 +108,10 @@ const DataLayer = {
     await Promise.all([...tareasColecciones, tareaRecetas]);
     this._emit();
 
+    const sufijo = Math.random().toString(36).slice(2, 10);
     for (const col of COLLECTIONS) {
       const channel = supabase
-        .channel(`${col}-${tenantId}`)
+        .channel(`${col}-${tenantId}-${sufijo}`)
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: col, filter: `tenant_id=eq.${tenantId}` },
@@ -122,7 +122,7 @@ const DataLayer = {
     }
 
     const configChannel = supabase
-      .channel(`config-${tenantId}`)
+      .channel(`config-${tenantId}-${sufijo}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "config", filter: `tenant_id=eq.${tenantId}` },
