@@ -655,6 +655,7 @@ function aplicarMovimiento(mov) {
       fecha: mov.fecha,
       nombre: `Consumo por ${prod.nombre}`,
       tipo: "Egreso",
+      sucursalId: mov.sucursalId,
       sucursal: mov.sucursal,
       bodegaId: mov.bodegaId,
       productoId: insumo.normalId,
@@ -682,9 +683,17 @@ function renderMovimientos() {
   const el = document.getElementById("view-movimientos");
   const data = editingIds.movimiento ? byId(state.movimientos, editingIds.movimiento) : {};
   const movimientosFiltrados = aplicarFiltroMovimientos(state.movimientos);
+  const sinSucursales = state.sucursales.length === 0;
+  const sucursalIdActual = data?.sucursalId
+    || state.sucursales.find((s) => s.nombre === data?.sucursal)?.id
+    || "";
+  const bodegasFiltradas = sucursalIdActual
+    ? state.bodegas.filter((b) => b.sucursalId === sucursalIdActual)
+    : state.bodegas;
   el.innerHTML = `
     <div class="card">
       <h2>Movimientos de Mercaderías</h2>
+      ${sinSucursales ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
       <div class="grid">
         <label>Id<input id="mov-id" value="${data?.id || uid("MOV")}" /></label>
         <label>Fecha<input type="date" id="mov-fecha" value="${data?.fecha || new Date().toISOString().slice(0, 10)}" /></label>
@@ -694,11 +703,16 @@ function renderMovimientos() {
             ${["Ingreso", "Egreso", "Traspaso"].map((x) => `<option ${data?.tipo === x ? "selected" : ""}>${x}</option>`).join("")}
           </select>
         </label>
-        <label>Sucursal<input id="mov-sucursal" value="${data?.sucursal || ""}" /></label>
+        <label>Sucursal
+          <select id="mov-sucursal" ${sinSucursales ? "disabled" : ""}>
+            <option value="">--</option>
+            ${state.sucursales.map((s) => `<option value="${s.id}" ${sucursalIdActual === s.id ? "selected" : ""}>${s.nombre}</option>`).join("")}
+          </select>
+        </label>
         <label>Bodega
           <select id="mov-bodega">
             <option value="">--</option>
-            ${state.bodegas.map((b) => `<option value="${b.id}" ${data?.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
+            ${bodegasFiltradas.map((b) => `<option value="${b.id}" ${data?.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
           </select>
         </label>
         <label>Producto
@@ -773,24 +787,38 @@ function renderMovimientos() {
     renderMovimientos();
   }));
 
+  const movSucSel = document.getElementById("mov-sucursal");
+  if (movSucSel) {
+    movSucSel.addEventListener("change", () => {
+      const nuevaSucId = movSucSel.value;
+      const select = document.getElementById("mov-bodega");
+      const filtradas = nuevaSucId ? state.bodegas.filter((b) => b.sucursalId === nuevaSucId) : state.bodegas;
+      select.innerHTML = `<option value="">--</option>` + filtradas.map((b) => `<option value="${b.id}">${b.nombre}</option>`).join("");
+    });
+  }
+
   document.getElementById("mov-guardar").addEventListener("click", () => {
     const productoId = document.getElementById("mov-producto").value;
     const prod = byId(state.productos, productoId);
     if (!prod) { toast("Selecciona un producto", "warn"); return; }
     const cantidad = Number(document.getElementById("mov-cantidad").value || 0);
     const cantidadBase = prod.tipo === "Normal" ? cantidad : cantidad;
+    const sucursalId = document.getElementById("mov-sucursal").value;
+    const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
     const mov = {
       id: document.getElementById("mov-id").value.trim(),
       fecha: document.getElementById("mov-fecha").value,
       nombre: document.getElementById("mov-nombre").value.trim(),
       tipo: document.getElementById("mov-tipo").value,
-      sucursal: document.getElementById("mov-sucursal").value.trim(),
+      sucursalId,
+      sucursal: sucursalNombre,
       bodegaId: document.getElementById("mov-bodega").value,
       productoId,
       cantidad,
       cantidadBase
     };
     if (!mov.id || !mov.fecha || !mov.nombre) { toast("Completa datos obligatorios", "warn"); return; }
+    if (!mov.sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
     const i = state.movimientos.findIndex((x) => x.id === mov.id);
     const editaba = i >= 0;
     if (editaba) state.movimientos[i] = mov;
@@ -831,19 +859,33 @@ function renderInventarios() {
   const iconEditar = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm14.71-9.96l-3-3 2-2c.39-.39 1.02-.39 1.41 0l2.59 2.59c.39.39.39 1.02 0 1.41l-2 2-1-1z"/></svg>`;
   const iconEliminar = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
 
+  const invSucursalIdActual = data?.sucursalId
+    || state.sucursales.find((s) => s.nombre === data?.sucursal)?.id
+    || "";
+  const invBodegasFiltradas = invSucursalIdActual
+    ? state.bodegas.filter((b) => b.sucursalId === invSucursalIdActual)
+    : state.bodegas;
+  const invSinSucursales = state.sucursales.length === 0;
+
   if (enModoCreacion) {
     el.innerHTML = `
       <div class="card">
         <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
           <legend>Datos del Inventario</legend>
+          ${invSinSucursales && !cabeceraFija ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
           <div class="grid">
             <label>Id<input id="inv-id" value="${data?.id || uid("INV")}" ${cabeceraFija ? "disabled" : ""} /></label>
             <label>Nombre<input id="inv-nombre" value="${data?.nombre || ""}" ${cabeceraFija ? "disabled" : ""} /></label>
-            <label>Sucursal<input id="inv-sucursal" value="${data?.sucursal || ""}" ${cabeceraFija ? "disabled" : ""} /></label>
+            <label>Sucursal
+              <select id="inv-sucursal" ${cabeceraFija || invSinSucursales ? "disabled" : ""}>
+                <option value="">--</option>
+                ${state.sucursales.map((s) => `<option value="${s.id}" ${invSucursalIdActual === s.id ? "selected" : ""}>${s.nombre}</option>`).join("")}
+              </select>
+            </label>
             <label>Bodega
               <select id="inv-bodega" ${cabeceraFija ? "disabled" : ""}>
                 <option value="">--</option>
-                ${state.bodegas.map((b) => `<option value="${b.id}" ${data?.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
+                ${invBodegasFiltradas.map((b) => `<option value="${b.id}" ${data?.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
               </select>
             </label>
             <label>Fecha<input type="date" id="inv-fecha" value="${data?.fecha || new Date().toISOString().slice(0, 10)}" ${cabeceraFija ? "disabled" : ""} /></label>
@@ -897,16 +939,29 @@ function renderInventarios() {
     `;
 
     if (showCabeceraInventarioForm && !cabeceraFija) {
+      const invSucSel = document.getElementById("inv-sucursal");
+      if (invSucSel) {
+        invSucSel.addEventListener("change", () => {
+          const nuevaSucId = invSucSel.value;
+          const select = document.getElementById("inv-bodega");
+          const filtradas = nuevaSucId ? state.bodegas.filter((b) => b.sucursalId === nuevaSucId) : state.bodegas;
+          select.innerHTML = `<option value="">--</option>` + filtradas.map((b) => `<option value="${b.id}">${b.nombre}</option>`).join("");
+        });
+      }
       document.getElementById("inv-guardar").addEventListener("click", () => {
+        const sucursalId = document.getElementById("inv-sucursal").value;
+        const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
         const item = {
           id: document.getElementById("inv-id").value.trim(),
           nombre: document.getElementById("inv-nombre").value.trim(),
-          sucursal: document.getElementById("inv-sucursal").value.trim(),
+          sucursalId,
+          sucursal: sucursalNombre,
           bodegaId: document.getElementById("inv-bodega").value,
           fecha: document.getElementById("inv-fecha").value,
           detalles: data?.detalles || []
         };
         if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
+        if (!item.sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
         const i = state.inventarios.findIndex((x) => x.id === item.id);
         if (i >= 0) state.inventarios[i] = item;
         else state.inventarios.push(item);
