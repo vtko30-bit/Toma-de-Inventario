@@ -20,21 +20,22 @@ let editingIds = {
 };
 let showDetalleInventarioForm = false;
 let showCabeceraInventarioForm = false;
+let showVerInventario = false;
+let _movLineasDraft = [];
+let _movCabeceraDraft = null;
+
+function capturarCabeceraMovDesdeDom() {
+  return {
+    fecha: document.getElementById("mov-fecha")?.value || new Date().toISOString().slice(0, 10),
+    tipo: document.getElementById("mov-tipo")?.value || "Ingreso",
+    sucursalId: document.getElementById("mov-sucursal")?.value || "",
+    bodegaId: document.getElementById("mov-bodega")?.value || ""
+  };
+}
 
 let _suppressNextSave = false;
 let _saving = false;
 let _renderTimer = null;
-
-const TIPOS_EMPAQUE = ["Unidad", "Caja", "Saco", "Tarro", "Bolsa", "Botella", "Pack", "Otro"];
-
-function describirEmpaque(prod) {
-  if (!prod) return "";
-  const tipo = prod.tipoEmpaque || "Unidad";
-  const upe = Number(prod.unidadesPorEmpaque || 1);
-  if (tipo === "Unidad" || upe <= 1) return tipo;
-  const um = prod.unidad || "";
-  return `${tipo} de ${upe}${um ? " " + um.toLowerCase() : ""}`;
-}
 
 function _hayInputEnfocado() {
   const el = document.activeElement;
@@ -121,21 +122,117 @@ function stockBaseProducto(productoId) {
   let total = 0;
   for (const mov of state.movimientos) {
     if (mov.productoId !== productoId) continue;
-    if (mov.tipo === "Ingreso") total += Number(mov.cantidadBase);
-    if (mov.tipo === "Egreso") total -= Number(mov.cantidadBase);
+    const base = Number(mov.cantidadBase ?? mov.cantidad) || 0;
+    if (mov.tipo === "Ingreso") total += base;
+    if (mov.tipo === "Egreso") total -= base;
   }
   return total;
 }
 
 function calcularStockVisible(producto) {
+  if (!producto) return "—";
   const base = stockBaseProducto(producto.id);
-  if (producto.tipo === "Normal") return `${base} unidad(es)`;
-  return `${base} gr`;
+  if (producto.tipo === "Normal") return `${base} ${producto.unidad || "unidad"}(es)`;
+  return `${base} ${producto.unidad || "gr"}`;
+}
+
+function stockLabelProducto(productoId) {
+  const p = byId(state.productos, productoId);
+  if (!p) return "Selecciona un producto para ver el stock";
+  return `Stock actual: ${calcularStockVisible(p)}`;
+}
+
+function opcionProductoConStock(p, selectedId) {
+  return `<option value="${p.id}" ${selectedId === p.id ? "selected" : ""}>${p.nombre} — Stock: ${calcularStockVisible(p)}</option>`;
+}
+
+const TIPOS_EMPAQUE = ["Unidad", "Caja", "Saco", "Tarro", "Bolsa", "Botella", "Pack", "Otro"];
+
+function cantidadPorEmpaqueProducto(prod) {
+  if (!prod) return 1;
+  const n = Number(prod.cantidadPorEmpaque);
+  if (prod.empaque === "Unidad" || !prod.empaque) return 1;
+  return n > 0 ? n : 1;
+}
+
+function calcularCantidadBase(cantidad, modoIngreso, cantidadPorEmpaque) {
+  const c = Number(cantidad) || 0;
+  const factor = Number(cantidadPorEmpaque) || 1;
+  if (modoIngreso === "empaque") return c * factor;
+  return c;
+}
+
+function etiquetaEmpaque(empaque, cantidadPorEmpaque) {
+  if (!empaque || empaque === "Unidad") return "Unidad";
+  const n = Number(cantidadPorEmpaque) || 1;
+  return `${empaque} (×${n})`;
+}
+
+function formatoCantidadMovimiento(mov, prod) {
+  const um = prod?.unidad || "Unidad";
+  const empaque = mov.empaque || prod?.empaque || "Unidad";
+  const porEmpaque = Number(mov.cantidadPorEmpaque) || cantidadPorEmpaqueProducto(prod);
+  const base = Number(mov.cantidadBase ?? mov.cantidad) || 0;
+  if (mov.modoIngreso === "base" || empaque === "Unidad") {
+    return `${base} ${um}`;
+  }
+  return `${mov.cantidad} ${empaque} = ${base} ${um}`;
+}
+
+let _recetaUi = {
+  showForm: false,
+  showIngrediente: false,
+  editingId: null,
+  draft: null
+};
+
+function getRecetasLista() {
+  const raw = state.recetas;
+  if (Array.isArray(raw)) return raw;
+  if (raw?.lista && Array.isArray(raw.lista)) return raw.lista;
+  if (!raw || typeof raw !== "object") return [];
+  return Object.entries(raw).map(([procId, items]) => ({
+    id: `REC-LEG-${procId}`,
+    nombre: byId(state.productos, procId)?.nombre || procId,
+    productoProcesadoId: procId,
+    ingredientes: (items || []).map((it) => ({
+      productoId: it.normalId,
+      cantidad: it.cantidad
+    }))
+  }));
+}
+
+function setRecetasLista(lista) {
+  state.recetas = { version: 2, lista };
+}
+
+function obtenerInsumosRecetaParaProducto(procesadoId) {
+  const lista = getRecetasLista();
+  const rec = lista.find((r) => r.productoProcesadoId === procesadoId);
+  if (rec) return rec.ingredientes || [];
+  if (state.recetas && typeof state.recetas === "object" && !state.recetas.lista && !Array.isArray(state.recetas)) {
+    return (state.recetas[procesadoId] || []).map((it) => ({
+      productoId: it.normalId,
+      cantidad: it.cantidad
+    }));
+  }
+  return [];
+}
+
+function limpiarRecetasPorProducto(productoId) {
+  const lista = getRecetasLista()
+    .map((r) => ({
+      ...r,
+      ingredientes: (r.ingredientes || []).filter((i) => i.productoId !== productoId)
+    }))
+    .filter((r) => r.productoProcesadoId !== productoId && (r.ingredientes || []).length > 0);
+  setRecetasLista(lista);
 }
 
 function render() {
   renderDashboard();
   renderProductos();
+  renderRecetas();
   renderFamilias();
   renderCategorias();
   renderSucursales();
@@ -230,9 +327,12 @@ function renderDashboard() {
       <h3>Últimos movimientos</h3>
       ${ultimos.length === 0 ? '<p class="empty-state">Aún no hay movimientos registrados.</p>' : `
       <table>
-        <thead><tr><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Producto</th><th>Cantidad</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Producto</th><th>Stock</th><th>Cantidad</th></tr></thead>
         <tbody>
-          ${ultimos.map((m) => `<tr><td>${m.fecha || ""}</td><td>${m.nombre || ""}</td><td>${m.tipo || ""}</td><td>${byId(state.productos, m.productoId)?.nombre || ""}</td><td>${m.cantidad}</td></tr>`).join("")}
+          ${ultimos.map((m) => {
+            const p = byId(state.productos, m.productoId);
+            return `<tr><td>${m.fecha || ""}</td><td>${m.nombre || ""}</td><td>${m.tipo || ""}</td><td>${p?.nombre || ""}</td><td>${p ? calcularStockVisible(p) : "—"}</td><td>${m.cantidad}</td></tr>`;
+          }).join("")}
         </tbody>
       </table>`}
     </div>
@@ -313,19 +413,19 @@ function renderProductos() {
             <option ${data?.tipo !== "Procesado" ? "selected" : ""}>Normal</option>
           </select>
         </label>
-        <label>Tipo de Empaque
-          <select id="prod-empaque">
-            ${TIPOS_EMPAQUE.map((e) => `<option ${(data?.tipoEmpaque || "Unidad") === e ? "selected" : ""}>${e}</option>`).join("")}
-          </select>
-        </label>
-        <label>Unidades por empaque
-          <input type="number" id="prod-upe" min="1" step="1" value="${data?.unidadesPorEmpaque || 1}" />
-        </label>
         <label>Familia
           <select id="prod-familia"><option value="">--</option>${familiasOpts}</select>
         </label>
         <label>Categoría
           <select id="prod-categoria"><option value="">--</option>${categoriasOpts}</select>
+        </label>
+        <label>Formato (por defecto)
+          <select id="prod-empaque">
+            ${TIPOS_EMPAQUE.map((e) => `<option ${(data?.empaque || "Unidad") === e ? "selected" : ""}>${e}</option>`).join("")}
+          </select>
+        </label>
+        <label id="prod-empaque-cant-wrap">Unidades por formato
+          <input type="number" id="prod-empaque-cant" min="1" step="any" value="${data?.cantidadPorEmpaque ?? (data?.empaque && data.empaque !== "Unidad" ? 1 : 1)}" />
         </label>
       </div>
       <div class="actions">
@@ -333,47 +433,13 @@ function renderProductos() {
         <button id="prod-editar" ${dis}>Editar</button>
         <button id="prod-eliminar" ${dis}>Eliminar</button>
       </div>
-      <p class="small">Para productos procesados, la cantidad base se maneja en gramos.</p>
-    </div>
-    <div class="card">
-      <h3>Receta de producto procesado</h3>
-      <div class="grid">
-        <label>Producto Procesado
-          <select id="receta-procesado">
-            <option value="">Seleccionar</option>
-            ${state.productos.filter((p) => p.tipo === "Procesado").map((p) => `<option value="${p.id}">${p.nombre}</option>`).join("")}
-          </select>
-        </label>
-        <label>Producto Normal
-          <select id="receta-normal">
-            <option value="">Seleccionar</option>
-            ${state.productos.filter((p) => p.tipo === "Normal").map((p) => `<option value="${p.id}">${p.nombre}</option>`).join("")}
-          </select>
-        </label>
-        <label>Cantidad base por unidad procesada (gramos/unidades)
-          <input type="number" id="receta-cantidad" value="0"/>
-        </label>
-      </div>
-      <div class="actions">
-        <button id="receta-agregar" ${dis}>Agregar composición</button>
-      </div>
-      <table>
-        <thead><tr><th>Producto procesado</th><th>Insumo normal</th><th>Cantidad</th></tr></thead>
-        <tbody>
-          ${Object.entries(state.recetas).flatMap(([procId, items]) => items.map((it) => {
-            const proc = byId(state.productos, procId);
-            const normal = byId(state.productos, it.normalId);
-            return `<tr><td>${proc?.nombre || procId}</td><td>${normal?.nombre || it.normalId}</td><td>${it.cantidad}</td></tr>`;
-          })).join("")}
-        </tbody>
-      </table>
     </div>
     <div class="card">
       <h3>Lista de productos</h3>
       <table>
-        <thead><tr><th>Id</th><th>Nombre</th><th>Precio</th><th>Tipo</th><th>Empaque</th><th>Familia</th><th>Categoría</th><th>Stock</th></tr></thead>
+        <thead><tr><th>Id</th><th>Nombre</th><th>Precio</th><th>Tipo</th><th>Formato</th><th>Familia</th><th>Categoría</th><th>Stock</th></tr></thead>
         <tbody>
-          ${state.productos.map((p) => `<tr data-id="${p.id}" class="row-producto"><td>${p.id}</td><td>${p.nombre}</td><td>${p.precio}</td><td>${p.tipo}</td><td>${describirEmpaque(p)}</td><td>${byId(state.familias, p.familiaId)?.nombre || ""}</td><td>${byId(state.categorias, p.categoriaId)?.nombre || ""}</td><td>${calcularStockVisible(p)}</td></tr>`).join("")}
+          ${state.productos.map((p) => `<tr data-id="${p.id}" class="row-producto"><td>${p.id}</td><td>${p.nombre}</td><td>${p.precio}</td><td>${p.tipo}</td><td>${etiquetaEmpaque(p.empaque || "Unidad", cantidadPorEmpaqueProducto(p))}</td><td>${byId(state.familias, p.familiaId)?.nombre || ""}</td><td>${byId(state.categorias, p.categoriaId)?.nombre || ""}</td><td>${calcularStockVisible(p)}</td></tr>`).join("")}
         </tbody>
       </table>
     </div>
@@ -381,6 +447,17 @@ function renderProductos() {
 
   document.getElementById("prod-familia").value = data?.familiaId || "";
   document.getElementById("prod-categoria").value = data?.categoriaId || "";
+
+  const prodEmpaqueSel = document.getElementById("prod-empaque");
+  const prodEmpaqueCant = document.getElementById("prod-empaque-cant");
+  const prodEmpaqueCantWrap = document.getElementById("prod-empaque-cant-wrap");
+  function syncProdEmpaqueCant() {
+    const esUnidad = prodEmpaqueSel.value === "Unidad";
+    prodEmpaqueCantWrap.style.display = esUnidad ? "none" : "";
+    if (esUnidad) prodEmpaqueCant.value = "1";
+  }
+  prodEmpaqueSel.addEventListener("change", syncProdEmpaqueCant);
+  syncProdEmpaqueCant();
 
   document.querySelectorAll(".row-producto").forEach((r) => {
     r.addEventListener("click", () => {
@@ -390,8 +467,6 @@ function renderProductos() {
   });
 
   document.getElementById("prod-guardar").addEventListener("click", () => {
-    const tipoEmpaque = document.getElementById("prod-empaque").value;
-    const unidadesPorEmpaque = Math.max(1, Number(document.getElementById("prod-upe").value || 1));
     const item = {
       id: document.getElementById("prod-id").value.trim(),
       nombre: document.getElementById("prod-nombre").value.trim(),
@@ -399,12 +474,18 @@ function renderProductos() {
       cantidad: Number(document.getElementById("prod-cantidad").value || 0),
       unidad: document.getElementById("prod-um").value,
       tipo: document.getElementById("prod-tipo").value,
-      tipoEmpaque,
-      unidadesPorEmpaque,
       familiaId: document.getElementById("prod-familia").value,
-      categoriaId: document.getElementById("prod-categoria").value
+      categoriaId: document.getElementById("prod-categoria").value,
+      empaque: document.getElementById("prod-empaque").value,
+      cantidadPorEmpaque: document.getElementById("prod-empaque").value === "Unidad"
+        ? 1
+        : Number(document.getElementById("prod-empaque-cant").value || 0)
     };
     if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
+    if (item.empaque !== "Unidad" && item.cantidadPorEmpaque <= 0) {
+      toast("Indica cuántas unidades trae cada formato", "warn");
+      return;
+    }
     const i = state.productos.findIndex((x) => x.id === item.id);
     const editaba = i >= 0;
     if (editaba) state.productos[i] = item;
@@ -424,24 +505,221 @@ function renderProductos() {
     const id = document.getElementById("prod-id").value.trim();
     if (!confirmar("¿Eliminar este producto?")) return;
     state.productos = state.productos.filter((x) => x.id !== id);
-    delete state.recetas[id];
-    Object.keys(state.recetas).forEach((k) => {
-      state.recetas[k] = state.recetas[k].filter((x) => x.normalId !== id);
-    });
+    limpiarRecetasPorProducto(id);
     editingIds.producto = null;
     toast("Producto eliminado", "success");
     render();
   });
+}
 
-  document.getElementById("receta-agregar").addEventListener("click", () => {
-    const procId = document.getElementById("receta-procesado").value;
-    const normalId = document.getElementById("receta-normal").value;
-    const cantidad = Number(document.getElementById("receta-cantidad").value || 0);
-    if (!procId || !normalId || cantidad <= 0) { toast("Completa la composición", "warn"); return; }
-    if (!state.recetas[procId]) state.recetas[procId] = [];
-    state.recetas[procId].push({ normalId, cantidad });
-    toast("Composición agregada", "success");
-    render();
+function guardarRecetaDesdeDraft() {
+  const draft = _recetaUi.draft;
+  if (!draft) return false;
+  const nombre = (draft.nombre || "").trim();
+  if (!nombre) {
+    toast("El nombre de la receta es obligatorio", "warn");
+    return false;
+  }
+  if (!draft.ingredientes.length) {
+    toast("Agrega al menos un ingrediente", "warn");
+    return false;
+  }
+  const lista = getRecetasLista().slice();
+  const proc = state.productos.find(
+    (p) => p.tipo === "Procesado" && p.nombre.trim().toLowerCase() === nombre.toLowerCase()
+  );
+  const receta = {
+    id: _recetaUi.editingId || uid("REC"),
+    nombre,
+    productoProcesadoId: proc?.id || null,
+    ingredientes: draft.ingredientes.map((i) => ({ ...i }))
+  };
+  const idx = lista.findIndex((r) => r.id === receta.id);
+  if (idx >= 0) lista[idx] = receta;
+  else lista.push(receta);
+  setRecetasLista(lista);
+  _recetaUi = { showForm: false, showIngrediente: false, editingId: null, draft: null };
+  return true;
+}
+
+function renderRecetas() {
+  const el = document.getElementById("view-recetas");
+  if (!el) return;
+  const soloLectura = !puedeEditarCatalogos();
+  const dis = soloLectura ? "disabled" : "";
+  const lista = getRecetasLista();
+  const draft = _recetaUi.draft;
+  const productosOpts = state.productos
+    .map((p) => `<option value="${p.id}">${p.nombre} (${p.tipo})</option>`)
+    .join("");
+  const iconEliminar = `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+
+  if (_recetaUi.showForm && draft) {
+    el.innerHTML = `
+      ${soloLectura ? '<div class="read-only-banner">Modo solo lectura.</div>' : ""}
+      <div class="card">
+        <h2>${_recetaUi.editingId ? "Editar receta" : "Crear receta"}</h2>
+        <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+          <legend>Datos de la receta</legend>
+          <div class="grid" style="grid-template-columns:1fr auto;align-items:end;gap:12px;">
+            <label>Nombre<input id="rec-nombre" value="${draft.nombre || ""}" ${dis} /></label>
+            <button type="button" id="btn-agregar-ingrediente" ${dis} ${state.productos.length === 0 ? "disabled" : ""}>Agregar ingrediente</button>
+          </div>
+        </fieldset>
+        ${_recetaUi.showIngrediente ? `
+        <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-top:14px;">
+          <legend>Ingrediente</legend>
+          ${state.productos.length === 0 ? '<p class="empty-state">Crea productos en la vista Productos primero.</p>' : `
+          <div class="grid">
+            <label>Producto
+              <select id="ing-producto" ${dis}>
+                <option value="">Seleccionar</option>
+                ${productosOpts}
+              </select>
+            </label>
+            <label>Cantidad<input type="number" id="ing-cantidad" min="0" step="any" value="0" ${dis} /></label>
+          </div>`}
+        </fieldset>` : ""}
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap;">
+          <h4 style="margin:0;">Ingredientes (${draft.ingredientes.length})</h4>
+          ${_recetaUi.showIngrediente ? `
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button type="button" id="btn-ing-anadir" ${dis}>Añadir</button>
+            <button type="button" id="btn-ing-guardar" ${dis}>Guardar</button>
+          </div>` : ""}
+        </div>
+        ${draft.ingredientes.length > 0
+          ? `<table>
+              <thead><tr><th>Producto</th><th>Cantidad</th><th>Unidad</th>${soloLectura ? "" : "<th></th>"}</tr></thead>
+              <tbody>
+                ${draft.ingredientes.map((ing, idx) => {
+                  const p = byId(state.productos, ing.productoId);
+                  return `<tr>
+                    <td>${p?.nombre || ing.productoId}</td>
+                    <td>${ing.cantidad}</td>
+                    <td>${p?.unidad || ""}</td>
+                    ${soloLectura ? "" : `<td><button type="button" class="btn-icon danger btn-quitar-ing-draft" data-idx="${idx}" title="Quitar">${iconEliminar}</button></td>`}
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>` : ""}
+        <div class="actions" style="display:flex;justify-content:flex-end;margin-top:14px;">
+          <button type="button" id="btn-receta-salir" class="btn-link">Salir</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("rec-nombre")?.addEventListener("input", (e) => {
+      draft.nombre = e.target.value;
+    });
+
+    document.getElementById("btn-agregar-ingrediente")?.addEventListener("click", () => {
+      _recetaUi.showIngrediente = true;
+      renderRecetas();
+    });
+
+    document.getElementById("btn-receta-salir")?.addEventListener("click", () => {
+      _recetaUi = { showForm: false, showIngrediente: false, editingId: null, draft: null };
+      renderRecetas();
+    });
+
+    document.querySelectorAll(".btn-quitar-ing-draft").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        draft.ingredientes.splice(Number(btn.dataset.idx), 1);
+        renderRecetas();
+      });
+    });
+
+    document.getElementById("btn-ing-anadir")?.addEventListener("click", () => {
+      const productoId = document.getElementById("ing-producto").value;
+      const cantidad = Number(document.getElementById("ing-cantidad").value || 0);
+      if (!productoId) { toast("Selecciona un producto", "warn"); return; }
+      if (cantidad <= 0) { toast("La cantidad debe ser mayor a 0", "warn"); return; }
+      draft.ingredientes.push({ productoId, cantidad });
+      document.getElementById("ing-producto").value = "";
+      document.getElementById("ing-cantidad").value = "0";
+      toast("Ingrediente añadido", "success");
+      renderRecetas();
+    });
+
+    document.getElementById("btn-ing-guardar")?.addEventListener("click", () => {
+      draft.nombre = document.getElementById("rec-nombre")?.value?.trim() || draft.nombre;
+      const eraEdicion = !!_recetaUi.editingId;
+      if (guardarRecetaDesdeDraft()) {
+        toast(eraEdicion ? "Receta actualizada" : "Receta guardada", "success");
+        render();
+      }
+    });
+    return;
+  }
+
+  el.innerHTML = `
+    ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>. Solo administradores pueden modificar recetas.</div>' : ""}
+    <div class="card">
+      <h2>Receta</h2>
+      <div class="actions">
+        <button type="button" id="btn-crear-receta" ${dis}>Crear Receta</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Recetas registradas (${lista.length})</h3>
+      ${lista.length === 0
+        ? '<p class="empty-state">No hay recetas. Presiona <strong>Crear Receta</strong>.</p>'
+        : `<table>
+            <thead>
+              <tr><th>Nombre</th><th>Ingredientes</th><th>Producto procesado</th>${soloLectura ? "" : "<th></th>"}</tr>
+            </thead>
+            <tbody>
+              ${lista.map((r) => {
+                const proc = r.productoProcesadoId ? byId(state.productos, r.productoProcesadoId) : null;
+                return `<tr class="row-receta" data-id="${r.id}" style="cursor:pointer;">
+                  <td>${r.nombre}</td>
+                  <td>${(r.ingredientes || []).length}</td>
+                  <td>${proc?.nombre || "—"}</td>
+                  ${soloLectura ? "" : `<td><button type="button" class="btn-icon danger btn-eliminar-receta" data-id="${r.id}" title="Eliminar receta">${iconEliminar}</button></td>`}
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>`}
+    </div>
+  `;
+
+  document.getElementById("btn-crear-receta")?.addEventListener("click", () => {
+    _recetaUi = {
+      showForm: true,
+      showIngrediente: false,
+      editingId: null,
+      draft: { nombre: "", ingredientes: [] }
+    };
+    renderRecetas();
+  });
+
+  document.querySelectorAll(".row-receta").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".btn-eliminar-receta")) return;
+      const rec = lista.find((r) => r.id === row.dataset.id);
+      if (!rec) return;
+      _recetaUi = {
+        showForm: true,
+        showIngrediente: false,
+        editingId: rec.id,
+        draft: {
+          nombre: rec.nombre,
+          ingredientes: (rec.ingredientes || []).map((i) => ({ ...i }))
+        }
+      };
+      renderRecetas();
+    });
+  });
+
+  document.querySelectorAll(".btn-eliminar-receta").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!confirmar("¿Eliminar esta receta completa?")) return;
+      setRecetasLista(lista.filter((r) => r.id !== btn.dataset.id));
+      toast("Receta eliminada", "success");
+      render();
+    });
   });
 }
 
@@ -671,8 +949,8 @@ function aplicarMovimiento(mov) {
   if (mov.tipo !== "Ingreso") return;
   const prod = byId(state.productos, mov.productoId);
   if (!prod || prod.tipo !== "Procesado") return;
-  const receta = state.recetas[prod.id] || [];
-  receta.forEach((insumo) => {
+  const insumos = obtenerInsumosRecetaParaProducto(prod.id);
+  insumos.forEach((insumo) => {
     state.movimientos.push({
       id: uid("AUTO-EG"),
       fecha: mov.fecha,
@@ -681,15 +959,15 @@ function aplicarMovimiento(mov) {
       sucursalId: mov.sucursalId,
       sucursal: mov.sucursal,
       bodegaId: mov.bodegaId,
-      productoId: insumo.normalId,
-      cantidad: insumo.cantidad * Number(mov.cantidad),
-      cantidadBase: insumo.cantidad * Number(mov.cantidad),
+      productoId: insumo.productoId,
+      cantidad: insumo.cantidad * Number(mov.cantidadBase),
+      cantidadBase: insumo.cantidad * Number(mov.cantidadBase),
       auto: true
     });
   });
 }
 
-let _movFilter = { fechaDesde: "", fechaHasta: "", tipo: "", productoId: "", nombre: "" };
+let _movFilter = { fechaDesde: "", fechaHasta: "", tipo: "", productoId: "" };
 
 function aplicarFiltroMovimientos(lista) {
   return lista.filter((m) => {
@@ -697,33 +975,216 @@ function aplicarFiltroMovimientos(lista) {
     if (_movFilter.fechaHasta && m.fecha > _movFilter.fechaHasta) return false;
     if (_movFilter.tipo && m.tipo !== _movFilter.tipo) return false;
     if (_movFilter.productoId && m.productoId !== _movFilter.productoId) return false;
-    if (_movFilter.nombre && !(m.nombre || "").toLowerCase().includes(_movFilter.nombre.toLowerCase())) return false;
     return true;
   });
+}
+
+function sincronizarFiltroMovDesdeDom() {
+  _movFilter = {
+    fechaDesde: document.getElementById("filt-mov-desde")?.value || "",
+    fechaHasta: document.getElementById("filt-mov-hasta")?.value || "",
+    tipo: document.getElementById("filt-mov-tipo")?.value || "",
+    productoId: document.getElementById("filt-mov-producto")?.value || ""
+  };
+}
+
+function htmlListaMovimientosFiltrada() {
+  const movimientosFiltrados = aplicarFiltroMovimientos(state.movimientos);
+  const total = state.movimientos.length;
+  const contador = movimientosFiltrados.length !== total
+    ? ` (${movimientosFiltrados.length} de ${total})`
+    : ` (${movimientosFiltrados.length})`;
+  if (movimientosFiltrados.length === 0) {
+    return `<h3>Movimientos${contador}</h3><p class="empty-state">No hay movimientos que coincidan con los filtros.</p>`;
+  }
+  return `
+    <h3>Movimientos${contador}</h3>
+    <table>
+      <thead><tr><th>Id</th><th>Fecha</th><th>Tipo</th><th>Sucursal</th><th>Producto</th><th>Stock</th><th>Cantidad</th><th>Base</th></tr></thead>
+      <tbody>
+        ${movimientosFiltrados.map((m) => {
+          const p = byId(state.productos, m.productoId);
+          return `<tr data-id="${m.id}" class="row-mov" style="cursor:pointer;"><td>${m.id}</td><td>${m.fecha}</td><td>${m.tipo}</td><td>${m.sucursal}</td><td>${p?.nombre || ""}</td><td>${p ? calcularStockVisible(p) : "—"}</td><td>${formatoCantidadMovimiento(m, p)}</td><td>${m.cantidadBase ?? m.cantidad}</td></tr>`;
+        }).join("")}
+      </tbody>
+    </table>`;
+}
+
+function enlazarFilasMovimiento() {
+  document.querySelectorAll(".row-mov").forEach((r) => r.addEventListener("click", () => {
+    editingIds.movimiento = r.dataset.id;
+    _movLineasDraft = [];
+    renderMovimientos();
+  }));
+}
+
+function actualizarListaMovimientosFiltrada() {
+  sincronizarFiltroMovDesdeDom();
+  const card = document.getElementById("mov-lista-card");
+  if (!card) return;
+  card.innerHTML = htmlListaMovimientosFiltrada();
+  enlazarFilasMovimiento();
+}
+
+function setupFiltrosMovimiento() {
+  const onCambio = () => actualizarListaMovimientosFiltrada();
+  ["filt-mov-desde", "filt-mov-hasta", "filt-mov-tipo", "filt-mov-producto"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", onCambio);
+    el.addEventListener("input", onCambio);
+  });
+  document.getElementById("filt-mov-limpiar")?.addEventListener("click", () => {
+    _movFilter = { fechaDesde: "", fechaHasta: "", tipo: "", productoId: "" };
+    const desde = document.getElementById("filt-mov-desde");
+    const hasta = document.getElementById("filt-mov-hasta");
+    const tipo = document.getElementById("filt-mov-tipo");
+    const producto = document.getElementById("filt-mov-producto");
+    if (desde) desde.value = "";
+    if (hasta) hasta.value = "";
+    if (tipo) tipo.value = "";
+    if (producto) producto.value = "";
+    actualizarListaMovimientosFiltrada();
+  });
+}
+
+function htmlLineaMovimiento(linea, index, esUltima, esEdicionUnica) {
+  const prod = byId(state.productos, linea.productoId);
+  const empaque = linea.empaque || prod?.empaque || "Unidad";
+  const bloqueada = linea.bloqueada && !esEdicionUnica;
+
+  if (bloqueada) {
+    return `
+      <div class="mov-linea grid mov-linea-grid mov-linea-bloqueada" data-linea="${index}">
+        <div><span class="inv-dato-label">Producto</span><span class="inv-dato-valor">${prod?.nombre || "—"}</span></div>
+        <div><span class="inv-dato-label">Formato</span><span class="inv-dato-valor">${empaque}</span></div>
+        <div><span class="inv-dato-label">Cantidad</span><span class="inv-dato-valor">${linea.cantidad}</span></div>
+        <div><span class="inv-dato-label">Stock</span><span class="inv-dato-valor">${prod ? calcularStockVisible(prod) : "—"}</span></div>
+        <div class="mov-add-cell"></div>
+      </div>`;
+  }
+
+  return `
+    <div class="mov-linea grid mov-linea-grid" data-linea="${index}">
+      <label>Producto
+        <select id="mov-producto-${index}">
+          <option value="">--</option>
+          ${state.productos.map((p) => opcionProductoConStock(p, linea.productoId)).join("")}
+        </select>
+      </label>
+      <label>Formato
+        <select id="mov-empaque-${index}">
+          ${TIPOS_EMPAQUE.map((e) => `<option ${empaque === e ? "selected" : ""}>${e}</option>`).join("")}
+        </select>
+      </label>
+      <label><span class="mov-cantidad-label" data-linea="${index}">Cantidad</span>
+        <input type="number" id="mov-cantidad-${index}" min="0" step="any" value="${linea.cantidad ?? 0}" />
+      </label>
+      <label>Stock
+        <div id="mov-stock-info-${index}" class="stock-display">${prod ? calcularStockVisible(prod) : "—"}</div>
+      </label>
+      <label class="mov-add-cell">
+        <span class="mov-add-label">&nbsp;</span>
+        ${esUltima && !esEdicionUnica ? `<button type="button" class="btn-mov-add" data-linea="${index}" title="Agregar otra línea">+</button>` : ""}
+      </label>
+    </div>
+    <p class="small mov-linea-preview" id="mov-preview-${index}"></p>`;
+}
+
+function capturarLineaMovDesdeDom(index) {
+  return {
+    productoId: document.getElementById(`mov-producto-${index}`)?.value || "",
+    empaque: document.getElementById(`mov-empaque-${index}`)?.value || "Unidad",
+    cantidad: Number(document.getElementById(`mov-cantidad-${index}`)?.value || 0),
+    bloqueada: false
+  };
+}
+
+function setupLineaMovimiento(index, esEdicionUnica) {
+  const prodSel = document.getElementById(`mov-producto-${index}`);
+  const empaqueSel = document.getElementById(`mov-empaque-${index}`);
+  const cantInp = document.getElementById(`mov-cantidad-${index}`);
+  const cantLabel = document.querySelector(`.mov-cantidad-label[data-linea="${index}"]`);
+  const stockEl = document.getElementById(`mov-stock-info-${index}`);
+  const preview = document.getElementById(`mov-preview-${index}`);
+  if (!prodSel) return;
+
+  const actualizar = () => {
+    const prod = byId(state.productos, prodSel.value);
+    if (stockEl) stockEl.textContent = prod ? calcularStockVisible(prod) : "—";
+    const empaque = empaqueSel.value;
+    const porEmpaque = cantidadPorEmpaqueProducto(prod);
+    const cant = Number(cantInp.value || 0);
+    const um = prod?.unidad || "unidad base";
+    if (cantLabel) cantLabel.textContent = `Cantidad (${empaque}${empaque !== "Unidad" ? "s" : ""})`;
+    if (preview) {
+      preview.textContent = porEmpaque > 0 && cant > 0 ? `Equivale a ${calcularCantidadBase(cant, "empaque", porEmpaque)} ${um} en stock` : "";
+    }
+  };
+
+  prodSel.addEventListener("change", () => {
+    const prod = byId(state.productos, prodSel.value);
+    if (prod) empaqueSel.value = prod.empaque || "Unidad";
+    actualizar();
+  });
+  empaqueSel.addEventListener("change", actualizar);
+  cantInp.addEventListener("input", actualizar);
+  actualizar();
 }
 
 function renderMovimientos() {
   const el = document.getElementById("view-movimientos");
   const data = editingIds.movimiento ? byId(state.movimientos, editingIds.movimiento) : {};
-  const movimientosFiltrados = aplicarFiltroMovimientos(state.movimientos);
+  const esEdicionUnica = !!editingIds.movimiento;
+
+  if (esEdicionUnica) {
+    _movCabeceraDraft = {
+      fecha: data.fecha || new Date().toISOString().slice(0, 10),
+      tipo: data.tipo || "Ingreso",
+      sucursalId: data.sucursalId || state.sucursales.find((s) => s.nombre === data.sucursal)?.id || "",
+      bodegaId: data.bodegaId || ""
+    };
+    _movLineasDraft = [{
+      productoId: data.productoId || "",
+      empaque: data.empaque || "Unidad",
+      cantidad: data.cantidad ?? 0,
+      bloqueada: false
+    }];
+  } else {
+    if (!_movCabeceraDraft) {
+      _movCabeceraDraft = {
+        fecha: new Date().toISOString().slice(0, 10),
+        tipo: "Ingreso",
+        sucursalId: "",
+        bodegaId: ""
+      };
+    }
+    if (_movLineasDraft.length === 0) {
+      _movLineasDraft = [{ productoId: "", empaque: "Unidad", cantidad: 0, bloqueada: false }];
+    }
+  }
+
+  const cab = _movCabeceraDraft;
   const sinSucursales = state.sucursales.length === 0;
-  const sucursalIdActual = data?.sucursalId
-    || state.sucursales.find((s) => s.nombre === data?.sucursal)?.id
-    || "";
+  const sucursalIdActual = cab.sucursalId || "";
   const bodegasFiltradas = sucursalIdActual
     ? state.bodegas.filter((b) => b.sucursalId === sucursalIdActual)
     : state.bodegas;
+
+  const lineasHtml = _movLineasDraft.map((linea, i) =>
+    htmlLineaMovimiento(linea, i, i === _movLineasDraft.length - 1, esEdicionUnica)
+  ).join("");
+
   el.innerHTML = `
     <div class="card">
       <h2>Movimientos de Mercaderías</h2>
       ${sinSucursales ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
-      <div class="grid">
-        <label>Id<input id="mov-id" value="${data?.id || uid("MOV")}" /></label>
-        <label>Fecha<input type="date" id="mov-fecha" value="${data?.fecha || new Date().toISOString().slice(0, 10)}" /></label>
-        <label>Nombre<input id="mov-nombre" value="${data?.nombre || ""}" /></label>
+      <input type="hidden" id="mov-id" value="${data?.id || uid("MOV")}" />
+      <div class="grid mov-form-grid">
+        <label>Fecha<input type="date" id="mov-fecha" value="${cab.fecha}" /></label>
         <label>Tipo de Movimiento
           <select id="mov-tipo">
-            ${["Ingreso", "Egreso", "Traspaso"].map((x) => `<option ${data?.tipo === x ? "selected" : ""}>${x}</option>`).join("")}
+            ${["Ingreso", "Egreso", "Traspaso"].map((x) => `<option ${cab.tipo === x ? "selected" : ""}>${x}</option>`).join("")}
           </select>
         </label>
         <label>Sucursal
@@ -735,28 +1196,13 @@ function renderMovimientos() {
         <label>Bodega
           <select id="mov-bodega">
             <option value="">--</option>
-            ${bodegasFiltradas.map((b) => `<option value="${b.id}" ${data?.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
+            ${bodegasFiltradas.map((b) => `<option value="${b.id}" ${cab.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
           </select>
         </label>
-        <label>Producto
-          <select id="mov-producto">
-            <option value="">--</option>
-            ${state.productos.map((p) => `<option value="${p.id}" ${data?.productoId === p.id ? "selected" : ""}>${p.nombre}</option>`).join("")}
-          </select>
-        </label>
-        <label>Empaque
-          <select id="mov-empaque">
-            ${TIPOS_EMPAQUE.map((e) => `<option ${data?.tipoEmpaque === e ? "selected" : ""}>${e}</option>`).join("")}
-          </select>
-        </label>
-        <label>Unidades por empaque<input type="number" id="mov-upe" min="1" step="1" value="${data?.unidadesPorEmpaque || 1}" /></label>
-        <label style="display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="mov-por-empaques" ${data?.usarEmpaques ? "checked" : ""} style="width:auto;" />
-          Ingresar por empaques
-        </label>
-        <label>Cantidad<input type="number" id="mov-cantidad" value="${data?.cantidad ?? 0}" /></label>
       </div>
-      <p class="small" id="mov-empaque-info" style="margin:6px 0 0 0;color:#475569;"></p>
+      <div id="mov-lineas-container" style="margin-top:12px;">
+        ${lineasHtml}
+      </div>
       <div class="actions">
         <button id="mov-guardar">Guardar</button>
         <button id="mov-editar">Editar</button>
@@ -764,8 +1210,7 @@ function renderMovimientos() {
       </div>
     </div>
     <div class="card">
-      <h3>Filtros</h3>
-      <div class="grid">
+      <div class="filt-mov-row">
         <label>Desde<input type="date" id="filt-mov-desde" value="${_movFilter.fechaDesde}" /></label>
         <label>Hasta<input type="date" id="filt-mov-hasta" value="${_movFilter.fechaHasta}" /></label>
         <label>Tipo
@@ -780,52 +1225,17 @@ function renderMovimientos() {
             ${state.productos.map((p) => `<option value="${p.id}" ${_movFilter.productoId === p.id ? "selected" : ""}>${p.nombre}</option>`).join("")}
           </select>
         </label>
-        <label>Nombre<input id="filt-mov-nombre" value="${_movFilter.nombre}" placeholder="Buscar por nombre" /></label>
-      </div>
-      <div class="actions">
-        <button id="filt-mov-aplicar">Aplicar</button>
-        <button id="filt-mov-limpiar">Limpiar</button>
+        <button type="button" id="filt-mov-limpiar">Limpiar</button>
       </div>
     </div>
 
-    <div class="card">
-      <h3>Movimientos (${movimientosFiltrados.length}${movimientosFiltrados.length !== state.movimientos.length ? ` de ${state.movimientos.length}` : ""})</h3>
-      ${movimientosFiltrados.length === 0 ? '<p class="empty-state">No hay movimientos que coincidan con los filtros.</p>' : `
-      <table>
-        <thead><tr><th>Id</th><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Sucursal</th><th>Producto</th><th>Cantidad</th><th>Empaque</th><th>Total base</th></tr></thead>
-        <tbody>
-          ${movimientosFiltrados.map((m) => {
-            const prod = byId(state.productos, m.productoId);
-            const um = prod?.unidad || "";
-            const empaqueTxt = m.usarEmpaques ? `${m.tipoEmpaque || "Unidad"} × ${m.unidadesPorEmpaque || 1}` : "—";
-            const base = m.cantidadBase ?? m.cantidad;
-            return `<tr data-id="${m.id}" class="row-mov" style="cursor:pointer;"><td>${m.id}</td><td>${m.fecha}</td><td>${m.nombre}</td><td>${m.tipo}</td><td>${m.sucursal || ""}</td><td>${prod?.nombre || ""}</td><td>${m.cantidad}</td><td>${empaqueTxt}</td><td>${base}${um ? " " + um.toLowerCase() : ""}</td></tr>`;
-          }).join("")}
-        </tbody>
-      </table>`}
+    <div class="card" id="mov-lista-card">
+      ${htmlListaMovimientosFiltrada()}
     </div>
   `;
 
-  document.getElementById("filt-mov-aplicar").addEventListener("click", () => {
-    _movFilter = {
-      fechaDesde: document.getElementById("filt-mov-desde").value,
-      fechaHasta: document.getElementById("filt-mov-hasta").value,
-      tipo: document.getElementById("filt-mov-tipo").value,
-      productoId: document.getElementById("filt-mov-producto").value,
-      nombre: document.getElementById("filt-mov-nombre").value.trim()
-    };
-    renderMovimientos();
-  });
-
-  document.getElementById("filt-mov-limpiar").addEventListener("click", () => {
-    _movFilter = { fechaDesde: "", fechaHasta: "", tipo: "", productoId: "", nombre: "" };
-    renderMovimientos();
-  });
-
-  document.querySelectorAll(".row-mov").forEach((r) => r.addEventListener("click", () => {
-    editingIds.movimiento = r.dataset.id;
-    renderMovimientos();
-  }));
+  setupFiltrosMovimiento();
+  enlazarFilasMovimiento();
 
   const movSucSel = document.getElementById("mov-sucursal");
   if (movSucSel) {
@@ -837,83 +1247,107 @@ function renderMovimientos() {
     });
   }
 
-  function actualizarInfoEmpaque() {
-    const info = document.getElementById("mov-empaque-info");
-    if (!info) return;
-    const prod = byId(state.productos, document.getElementById("mov-producto").value);
-    const usar = document.getElementById("mov-por-empaques").checked;
-    const empaque = document.getElementById("mov-empaque").value;
-    const upe = Math.max(1, Number(document.getElementById("mov-upe").value || 1));
-    const cant = Number(document.getElementById("mov-cantidad").value || 0);
-    if (!prod) { info.textContent = ""; return; }
-    const um = prod.unidad || "unidad";
-    if (usar) {
-      const base = cant * upe;
-      info.textContent = `${cant} ${empaque.toLowerCase()}(s) × ${upe} ${um.toLowerCase()} = ${base} ${um.toLowerCase()}(s) en stock`;
-    } else {
-      info.textContent = `Ingresando ${cant} ${um.toLowerCase()}(s). 1 ${empaque.toLowerCase()} = ${upe} ${um.toLowerCase()}(s).`;
-    }
-  }
-
-  const movProdSel = document.getElementById("mov-producto");
-  if (movProdSel) {
-    movProdSel.addEventListener("change", () => {
-      const prod = byId(state.productos, movProdSel.value);
-      if (prod) {
-        document.getElementById("mov-empaque").value = prod.tipoEmpaque || "Unidad";
-        document.getElementById("mov-upe").value = prod.unidadesPorEmpaque || 1;
-      }
-      actualizarInfoEmpaque();
-    });
-  }
-  ["mov-por-empaques", "mov-empaque", "mov-upe", "mov-cantidad"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener("input", actualizarInfoEmpaque);
-    if (el && el.tagName === "SELECT") el.addEventListener("change", actualizarInfoEmpaque);
+  _movLineasDraft.forEach((linea, i) => {
+    if (!linea.bloqueada) setupLineaMovimiento(i, esEdicionUnica);
   });
-  actualizarInfoEmpaque();
+
+  document.querySelectorAll(".btn-mov-add").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.linea);
+      const actual = capturarLineaMovDesdeDom(idx);
+      if (!actual.productoId) {
+        toast("Selecciona un producto antes de agregar otra línea", "warn");
+        return;
+      }
+      _movCabeceraDraft = capturarCabeceraMovDesdeDom();
+      _movLineasDraft[idx] = { ...actual, bloqueada: true };
+      _movLineasDraft.push({ productoId: "", empaque: "Unidad", cantidad: 0, bloqueada: false });
+      renderMovimientos();
+    });
+  });
 
   document.getElementById("mov-guardar").addEventListener("click", () => {
-    const productoId = document.getElementById("mov-producto").value;
-    const prod = byId(state.productos, productoId);
-    if (!prod) { toast("Selecciona un producto", "warn"); return; }
-    const usarEmpaques = document.getElementById("mov-por-empaques").checked;
-    const tipoEmpaque = document.getElementById("mov-empaque").value;
-    const unidadesPorEmpaque = Math.max(1, Number(document.getElementById("mov-upe").value || 1));
-    const cantidadIngresada = Number(document.getElementById("mov-cantidad").value || 0);
-    const cantidadBase = usarEmpaques ? cantidadIngresada * unidadesPorEmpaque : cantidadIngresada;
     const sucursalId = document.getElementById("mov-sucursal").value;
     const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
-    const mov = {
-      id: document.getElementById("mov-id").value.trim(),
-      fecha: document.getElementById("mov-fecha").value,
-      nombre: document.getElementById("mov-nombre").value.trim(),
-      tipo: document.getElementById("mov-tipo").value,
-      sucursalId,
-      sucursal: sucursalNombre,
-      bodegaId: document.getElementById("mov-bodega").value,
-      productoId,
-      usarEmpaques,
-      tipoEmpaque,
-      unidadesPorEmpaque,
-      cantidad: cantidadIngresada,
-      cantidadBase
-    };
-    if (!mov.id || !mov.fecha || !mov.nombre) { toast("Completa datos obligatorios", "warn"); return; }
-    if (!mov.sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
-    const i = state.movimientos.findIndex((x) => x.id === mov.id);
-    const editaba = i >= 0;
-    if (editaba) state.movimientos[i] = mov;
-    else {
+    const tipoMov = document.getElementById("mov-tipo").value;
+    const fecha = document.getElementById("mov-fecha").value;
+    const bodegaId = document.getElementById("mov-bodega").value;
+    const movIdHidden = document.getElementById("mov-id").value.trim();
+
+    if (!fecha) { toast("Completa la fecha", "warn"); return; }
+    if (!sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
+
+    const lineasAGuardar = _movLineasDraft.map((linea, i) =>
+      linea.bloqueada ? linea : capturarLineaMovDesdeDom(i)
+    ).filter((l) => l.productoId);
+
+    if (lineasAGuardar.length === 0) {
+      toast("Agrega al menos un producto", "warn");
+      return;
+    }
+
+    if (esEdicionUnica) {
+      const linea = lineasAGuardar[0];
+      const prod = byId(state.productos, linea.productoId);
+      const cantidadPorEmpaque = cantidadPorEmpaqueProducto(prod);
+      const cantidadBase = calcularCantidadBase(linea.cantidad, "empaque", cantidadPorEmpaque);
+      const mov = {
+        id: movIdHidden,
+        fecha,
+        nombre: `${tipoMov} - ${prod.nombre}`,
+        tipo: tipoMov,
+        sucursalId,
+        sucursal: sucursalNombre,
+        bodegaId,
+        productoId: linea.productoId,
+        empaque: linea.empaque,
+        cantidadPorEmpaque,
+        modoIngreso: "empaque",
+        cantidad: linea.cantidad,
+        cantidadBase
+      };
+      const i = state.movimientos.findIndex((x) => x.id === mov.id);
+      if (i >= 0) state.movimientos[i] = mov;
+      editingIds.movimiento = null;
+      _movLineasDraft = [];
+      toast("Movimiento actualizado", "success");
+      render();
+      return;
+    }
+
+    let creados = 0;
+    lineasAGuardar.forEach((linea) => {
+      const prod = byId(state.productos, linea.productoId);
+      const cantidadPorEmpaque = cantidadPorEmpaqueProducto(prod);
+      const cantidadBase = calcularCantidadBase(linea.cantidad, "empaque", cantidadPorEmpaque);
+      const mov = {
+        id: uid("MOV"),
+        fecha,
+        nombre: `${tipoMov} - ${prod.nombre}`,
+        tipo: tipoMov,
+        sucursalId,
+        sucursal: sucursalNombre,
+        bodegaId,
+        productoId: linea.productoId,
+        empaque: linea.empaque,
+        cantidadPorEmpaque,
+        modoIngreso: "empaque",
+        cantidad: linea.cantidad,
+        cantidadBase
+      };
       state.movimientos.push(mov);
       aplicarMovimiento(mov);
-    }
-    editingIds.movimiento = null;
-    toast(`Movimiento ${editaba ? "actualizado" : "creado"}`, "success");
+      creados++;
+    });
+    _movCabeceraDraft = capturarCabeceraMovDesdeDom();
+    _movLineasDraft = [{ productoId: "", empaque: "Unidad", cantidad: 0, bloqueada: false }];
+    toast(`${creados} movimiento(s) creado(s)`, "success");
     render();
   });
+
   document.getElementById("mov-editar").addEventListener("click", () => {
     editingIds.movimiento = document.getElementById("mov-id").value.trim();
+    _movLineasDraft = [];
     renderMovimientos();
   });
   document.getElementById("mov-eliminar").addEventListener("click", () => {
@@ -921,15 +1355,40 @@ function renderMovimientos() {
     const id = document.getElementById("mov-id").value.trim();
     state.movimientos = state.movimientos.filter((x) => x.id !== id);
     editingIds.movimiento = null;
+    _movLineasDraft = [];
     toast("Movimiento eliminado", "success");
     render();
+  });
+}
+
+function cancelarInventarioCreacion() {
+  const id = editingIds.inventario;
+  const inv = id ? byId(state.inventarios, id) : null;
+  if (inv && (!inv.detalles || inv.detalles.length === 0)) {
+    state.inventarios = state.inventarios.filter((x) => x.id !== id);
+    saveData();
+  }
+  showCabeceraInventarioForm = false;
+  showDetalleInventarioForm = false;
+  showVerInventario = false;
+  editingIds.inventario = null;
+  editingIds.detalleInventario = null;
+  renderInventarios();
+}
+
+function filtrarInventariosLista() {
+  const fecha = document.getElementById("f-fecha")?.value || "";
+  const nombreInv = (document.getElementById("f-inv")?.value || "").toLowerCase();
+  return state.inventarios.filter((i) => {
+    const okFecha = !fecha || i.fecha === fecha;
+    const okInv = !nombreInv || (i.nombre || "").toLowerCase().includes(nombreInv);
+    return okFecha && okInv;
   });
 }
 
 function renderInventarios() {
   const el = document.getElementById("view-inventarios");
   const data = editingIds.inventario ? byId(state.inventarios, editingIds.inventario) : {};
-  const movimientos = filtrarMovimientosInventario();
   const inventarioActual = editingIds.inventario ? byId(state.inventarios, editingIds.inventario) : null;
   const detalles = inventarioActual?.detalles || [];
   const unidadesMedida = ["Unidad", "Gramo", "Kilo", "Litro", "Mililitro"];
@@ -973,8 +1432,9 @@ function renderInventarios() {
             <label>Fecha<input type="date" id="inv-fecha" value="${data?.fecha || new Date().toISOString().slice(0, 10)}" ${cabeceraFija ? "disabled" : ""} /></label>
           </div>
           ${!cabeceraFija ? `
-          <div class="actions">
-            <button id="inv-guardar">Guardar</button>
+          <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="inv-guardar">Guardar</button>
+            <button type="button" id="inv-cancelar" class="btn-link">Cancelar</button>
           </div>` : ""}
         </fieldset>
       </div>
@@ -987,8 +1447,9 @@ function renderInventarios() {
             <label>Nombre
               <select id="det-prod">
                 <option value="">--</option>
-                ${state.productos.map((p) => `<option value="${p.id}" ${detalleEditando?.productoId === p.id ? "selected" : ""}>${p.nombre}</option>`).join("")}
+                ${state.productos.map((p) => opcionProductoConStock(p, detalleEditando?.productoId)).join("")}
               </select>
+              <span id="det-stock-info" class="stock-info">${detalleEditando?.productoId ? stockLabelProducto(detalleEditando.productoId) : ""}</span>
             </label>
             <label>Cantidad<input type="number" id="det-cantidad" value="${detalleEditando?.cantidad ?? 0}" /></label>
             <label>Unidad de Medida
@@ -998,25 +1459,28 @@ function renderInventarios() {
               </select>
             </label>
           </div>
-          <div class="actions">
-            <button id="det-agregar">${detalleEditando ? "Actualizar" : "Agregar"}</button>
-            <button id="det-guardar">Guardar</button>
+          <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="det-agregar">${detalleEditando ? "Actualizar" : "Agregar"}</button>
+            <button type="button" id="det-guardar">Guardar</button>
           </div>
         </fieldset>
         <h4 style="margin-top:14px;">Movimientos ingresados</h4>
         <table>
           <thead>
-            <tr><th>Nombre</th><th>Cantidad</th><th>Unidad de Medida</th><th>Acciones</th></tr>
+            <tr><th>Nombre</th><th>Stock</th><th>Cantidad</th><th>Unidad de Medida</th><th>Acciones</th></tr>
           </thead>
           <tbody>
             ${detalles.length
               ? detalles.map((d) => {
                   const prod = byId(state.productos, d.productoId);
-                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${d.cantidad}</td><td>${d.unidad || ""}</td><td><button class="btn-icon btn-det-editar" data-id="${d.id}" title="Editar">${iconEditar}</button><button class="btn-icon danger btn-det-eliminar" data-id="${d.id}" title="Eliminar">${iconEliminar}</button></td></tr>`;
+                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td><td>${d.cantidad}</td><td>${d.unidad || ""}</td><td><button class="btn-icon btn-det-editar" data-id="${d.id}" title="Editar">${iconEditar}</button><button class="btn-icon danger btn-det-eliminar" data-id="${d.id}" title="Eliminar">${iconEliminar}</button></td></tr>`;
                 }).join("")
-              : `<tr><td colspan="4" class="small">Sin movimientos ingresados.</td></tr>`}
+              : `<tr><td colspan="5" class="small">Sin movimientos ingresados.</td></tr>`}
           </tbody>
         </table>
+        <div class="actions inv-salir-wrap">
+          <button type="button" id="inv-salir" class="btn-salir">Salir</button>
+        </div>
       </div>` : ""}
     `;
 
@@ -1030,6 +1494,12 @@ function renderInventarios() {
           select.innerHTML = `<option value="">--</option>` + filtradas.map((b) => `<option value="${b.id}">${b.nombre}</option>`).join("");
         });
       }
+      document.getElementById("inv-cancelar")?.addEventListener("click", () => {
+        if (confirmar("¿Cancelar la creación del inventario? No se guardará.")) {
+          cancelarInventarioCreacion();
+        }
+      });
+
       document.getElementById("inv-guardar").addEventListener("click", () => {
         const sucursalId = document.getElementById("inv-sucursal").value;
         const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
@@ -1056,6 +1526,14 @@ function renderInventarios() {
     }
 
     if (showDetalleInventarioForm) {
+      const detProdSel = document.getElementById("det-prod");
+      const detStockInfo = document.getElementById("det-stock-info");
+      if (detProdSel && detStockInfo) {
+        detProdSel.addEventListener("change", () => {
+          detStockInfo.textContent = detProdSel.value ? stockLabelProducto(detProdSel.value) : "";
+        });
+      }
+
       const agregarProducto = () => {
         if (!editingIds.inventario) { toast("No hay un inventario activo", "warn"); return; }
         const inv = byId(state.inventarios, editingIds.inventario);
@@ -1083,8 +1561,17 @@ function renderInventarios() {
         if (productoId) agregarProducto();
         showCabeceraInventarioForm = false;
         showDetalleInventarioForm = false;
+        showVerInventario = false;
         editingIds.detalleInventario = null;
         render();
+      });
+
+      document.getElementById("inv-salir")?.addEventListener("click", () => {
+        showCabeceraInventarioForm = false;
+        showDetalleInventarioForm = false;
+        showVerInventario = false;
+        editingIds.detalleInventario = null;
+        renderInventarios();
       });
 
       document.querySelectorAll(".btn-det-editar").forEach((b) => b.addEventListener("click", (e) => {
@@ -1102,8 +1589,13 @@ function renderInventarios() {
         render();
       }));
     }
+
     return;
   }
+
+  const inventariosFiltrados = filtrarInventariosLista();
+  const invVer = showVerInventario && inventarioActual ? inventarioActual : null;
+  const detallesVer = invVer?.detalles || [];
 
   el.innerHTML = `
     <div class="card">
@@ -1111,60 +1603,89 @@ function renderInventarios() {
       <div class="grid">
         <label>Fecha<input type="date" id="f-fecha"/></label>
         <label>Nombre Inventario<input id="f-inv"/></label>
-        <label>Nombre Producto<input id="f-prod"/></label>
-        <label>Periodo
-          <select id="f-periodo">
-            <option>Día</option><option>Mes</option><option>Año</option><option>Personalizado</option>
-          </select>
-        </label>
       </div>
-      <div class="actions"><button id="aplicar-filtro">Aplicar filtros</button></div>
+      <div class="actions"><button type="button" id="aplicar-filtro">Aplicar filtros</button></div>
     </div>
     <div class="card">
       <h3>Lista de inventarios</h3>
-      <table>
+      ${inventariosFiltrados.length === 0
+        ? '<p class="empty-state">No hay inventarios que coincidan con los filtros.</p>'
+        : `<table>
         <thead><tr><th>Id</th><th>Nombre</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th></tr></thead>
         <tbody>
-          ${state.inventarios.map((i) => `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${i.id}</td><td>${i.nombre}</td><td>${i.sucursal || ""}</td><td>${byId(state.bodegas, i.bodegaId)?.nombre || ""}</td><td>${i.fecha}</td><td>${i.detalles?.length || 0}</td></tr>`).join("")}
+          ${inventariosFiltrados.map((i) => `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${i.id}</td><td>${i.nombre}</td><td>${i.sucursal || ""}</td><td>${byId(state.bodegas, i.bodegaId)?.nombre || ""}</td><td>${i.fecha}</td><td>${i.detalles?.length || 0}</td></tr>`).join("")}
         </tbody>
-      </table>
+      </table>`}
     </div>
-    <div class="card">
-      <h3>Lista de movimientos</h3>
-      <table>
-        <thead><tr><th>Fecha</th><th>Nombre</th><th>Tipo</th><th>Sucursal</th><th>Cantidad</th></tr></thead>
-        <tbody>
-          ${movimientos.map((m) => `<tr><td>${m.fecha}</td><td>${m.nombre}</td><td>${m.tipo}</td><td>${m.sucursal}</td><td>${m.cantidad}</td></tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
+    ${invVer ? `
+    <div class="inv-modal-overlay" id="inv-modal-overlay">
+      <div class="inv-modal card" role="dialog" aria-labelledby="inv-modal-titulo">
+        <h2 id="inv-modal-titulo">${invVer.nombre}</h2>
+        <fieldset class="inv-modal-fieldset">
+          <legend>Datos del Inventario</legend>
+          <div class="inv-datos-grid">
+            <div><span class="inv-dato-label">Id</span><span class="inv-dato-valor">${invVer.id}</span></div>
+            <div><span class="inv-dato-label">Nombre</span><span class="inv-dato-valor">${invVer.nombre}</span></div>
+            <div><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${invVer.sucursal || byId(state.sucursales, invVer.sucursalId)?.nombre || "—"}</span></div>
+            <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${byId(state.bodegas, invVer.bodegaId)?.nombre || "—"}</span></div>
+            <div><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${invVer.fecha || ""}</span></div>
+          </div>
+        </fieldset>
+        <h4 style="margin-top:16px;">Movimientos ingresados</h4>
+        ${detallesVer.length === 0
+          ? '<p class="empty-state">Sin movimientos ingresados en este inventario.</p>'
+          : `<table>
+              <thead>
+                <tr><th>Nombre</th><th>Stock</th><th>Cantidad</th><th>Unidad de Medida</th></tr>
+              </thead>
+              <tbody>
+                ${detallesVer.map((d) => {
+                  const prod = byId(state.productos, d.productoId);
+                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td><td>${d.cantidad}</td><td>${d.unidad || ""}</td></tr>`;
+                }).join("")}
+              </tbody>
+            </table>`}
+        <div class="actions inv-modal-actions">
+          <button type="button" id="inv-ver-editar">Editar</button>
+          <button type="button" id="inv-ver-cerrar" class="btn-salir">Salir</button>
+        </div>
+      </div>
+    </div>` : ""}
   `;
 
   document.querySelectorAll(".row-inv").forEach((r) => r.addEventListener("click", () => {
     editingIds.inventario = r.dataset.id;
     editingIds.detalleInventario = null;
-    showCabeceraInventarioForm = true;
-    showDetalleInventarioForm = true;
+    showCabeceraInventarioForm = false;
+    showDetalleInventarioForm = false;
+    showVerInventario = true;
     renderInventarios();
   }));
 
-  document.getElementById("aplicar-filtro").addEventListener("click", () => {
+  document.getElementById("aplicar-filtro")?.addEventListener("click", () => {
     renderInventarios();
   });
-}
 
-function filtrarMovimientosInventario() {
-  const fecha = document.getElementById("f-fecha")?.value || "";
-  const nombreInv = (document.getElementById("f-inv")?.value || "").toLowerCase();
-  const nombreProd = (document.getElementById("f-prod")?.value || "").toLowerCase();
-  const inv = editingIds.inventario ? byId(state.inventarios, editingIds.inventario) : null;
-  const invNombre = (inv?.nombre || "").toLowerCase();
-  return state.movimientos.filter((m) => {
-    const prod = byId(state.productos, m.productoId);
-    const okFecha = !fecha || m.fecha === fecha;
-    const okInv = !nombreInv || invNombre.includes(nombreInv);
-    const okProd = !nombreProd || (prod?.nombre || "").toLowerCase().includes(nombreProd);
-    return okFecha && okInv && okProd;
+  document.getElementById("inv-ver-editar")?.addEventListener("click", () => {
+    showVerInventario = false;
+    showCabeceraInventarioForm = true;
+    showDetalleInventarioForm = true;
+    editingIds.detalleInventario = null;
+    renderInventarios();
+  });
+
+  document.getElementById("inv-ver-cerrar")?.addEventListener("click", () => {
+    showVerInventario = false;
+    editingIds.inventario = null;
+    renderInventarios();
+  });
+
+  document.getElementById("inv-modal-overlay")?.addEventListener("click", (e) => {
+    if (e.target.id === "inv-modal-overlay") {
+      showVerInventario = false;
+      editingIds.inventario = null;
+      renderInventarios();
+    }
   });
 }
 
@@ -1219,6 +1740,7 @@ function setupNuevoInventarioTop() {
   document.getElementById("btnNuevoInventarioTop").addEventListener("click", () => {
     editingIds.inventario = null;
     editingIds.detalleInventario = null;
+    showVerInventario = false;
     showCabeceraInventarioForm = true;
     showDetalleInventarioForm = false;
     renderInventarios();
