@@ -23,6 +23,95 @@ let showCabeceraInventarioForm = false;
 let showVerInventario = false;
 let _movLineasDraft = [];
 let _movCabeceraDraft = null;
+let _invDetalleDraft = { productoId: "", cantidad: 0 };
+let _invCabeceraDraft = null;
+let _invListaFilter = { fecha: "", nombre: "", estado: "activos" };
+
+const ESTADOS_INVENTARIO = ["borrador", "cerrado", "anulado"];
+
+function esAdmin() {
+  return window.Auth?.isAdmin() === true;
+}
+
+function normalizarEstadoInventario(inv) {
+  if (inv.estado && ESTADOS_INVENTARIO.includes(inv.estado)) return inv.estado;
+  return (inv.detalles || []).length > 0 ? "cerrado" : "borrador";
+}
+
+function normalizarInventariosEstado() {
+  state.inventarios = (state.inventarios || []).map((inv) => ({
+    ...inv,
+    estado: normalizarEstadoInventario(inv)
+  }));
+}
+
+function etiquetaEstadoInventario(estado) {
+  const map = { borrador: "Borrador", cerrado: "Cerrado", anulado: "Anulado" };
+  return map[estado] || estado;
+}
+
+function htmlBadgeEstadoInventario(estadoOInv) {
+  const e = typeof estadoOInv === "string"
+    ? (ESTADOS_INVENTARIO.includes(estadoOInv) ? estadoOInv : "borrador")
+    : normalizarEstadoInventario(estadoOInv);
+  return `<span class="inv-estado-badge inv-estado-${e}">${etiquetaEstadoInventario(e)}</span>`;
+}
+
+function inventarioCoincideFiltroEstado(inv, filtroEstado) {
+  const estado = normalizarEstadoInventario(inv);
+  if (filtroEstado === "todos") return true;
+  if (filtroEstado === "activos") return estado !== "anulado";
+  return estado === filtroEstado;
+}
+
+function _formularioInventarioActivo() {
+  return showCabeceraInventarioForm || showDetalleInventarioForm;
+}
+
+function capturarInvDetalleDesdeDom() {
+  return {
+    productoId: document.getElementById("det-prod")?.value || "",
+    cantidad: Number(document.getElementById("det-cantidad")?.value || 0)
+  };
+}
+
+function capturarInvCabeceraDesdeDom() {
+  return {
+    id: document.getElementById("inv-id")?.value?.trim() || "",
+    nombre: document.getElementById("inv-nombre")?.value?.trim() || "",
+    sucursalId: document.getElementById("inv-sucursal")?.value || "",
+    bodegaId: document.getElementById("inv-bodega")?.value || "",
+    fecha: document.getElementById("inv-fecha")?.value || new Date().toISOString().slice(0, 10)
+  };
+}
+
+function preservarBorradoresInventario() {
+  if (document.getElementById("det-prod")) {
+    const det = capturarInvDetalleDesdeDom();
+    if (det.productoId || det.cantidad) _invDetalleDraft = det;
+  }
+  const cabeceraFija = showDetalleInventarioForm && editingIds.inventario;
+  if (showCabeceraInventarioForm && !cabeceraFija && document.getElementById("inv-nombre")) {
+    _invCabeceraDraft = capturarInvCabeceraDesdeDom();
+  }
+}
+
+function fusionarInventarioEnEdicion(invLocal) {
+  if (!invLocal?.id) return;
+  const idx = state.inventarios.findIndex((x) => x.id === invLocal.id);
+  const detallesLocal = invLocal.detalles || [];
+  if (idx >= 0) {
+    const remoto = state.inventarios[idx];
+    const detallesRemoto = remoto.detalles || [];
+    state.inventarios[idx] = {
+      ...remoto,
+      ...invLocal,
+      detalles: detallesLocal.length >= detallesRemoto.length ? detallesLocal : detallesRemoto
+    };
+  } else {
+    state.inventarios.push(invLocal);
+  }
+}
 
 function capturarCabeceraMovDesdeDom() {
   return {
@@ -49,6 +138,16 @@ function programarRender() {
   if (_renderTimer) clearTimeout(_renderTimer);
   _renderTimer = setTimeout(() => {
     _renderTimer = null;
+    if (_formularioInventarioActivo()) {
+      preservarBorradoresInventario();
+      if (_hayInputEnfocado()) {
+        programarRender();
+        return;
+      }
+      _suppressNextSave = true;
+      renderInventarios();
+      return;
+    }
     if (_hayInputEnfocado()) {
       programarRender();
       return;
@@ -144,6 +243,10 @@ function stockLabelProducto(productoId) {
 
 function opcionProductoConStock(p, selectedId) {
   return `<option value="${p.id}" ${selectedId === p.id ? "selected" : ""}>${p.nombre} — Stock: ${calcularStockVisible(p)}</option>`;
+}
+
+function opcionProductoNombre(p, selectedId) {
+  return `<option value="${p.id}" ${selectedId === p.id ? "selected" : ""}>${p.nombre}</option>`;
 }
 
 const TIPOS_EMPAQUE = ["Unidad", "Caja", "Saco", "Tarro", "Bolsa", "Botella", "Pack", "Otro"];
@@ -270,7 +373,7 @@ function renderDashboard() {
 
   const totalProductos = state.productos.length;
   const totalMovimientos = state.movimientos.length;
-  const totalInventarios = state.inventarios.length;
+  const totalInventarios = state.inventarios.filter((i) => normalizarEstadoInventario(i) === "cerrado").length;
   const totalBodegas = state.bodegas.length;
 
   const valorTotal = state.productos.reduce((acc, p) => {
@@ -1373,36 +1476,68 @@ function cancelarInventarioCreacion() {
   showVerInventario = false;
   editingIds.inventario = null;
   editingIds.detalleInventario = null;
+  _invDetalleDraft = { productoId: "", cantidad: 0 };
+  _invCabeceraDraft = null;
   renderInventarios();
 }
 
+function sincronizarFiltroInvListaDesdeDom() {
+  _invListaFilter = {
+    fecha: document.getElementById("f-fecha")?.value || "",
+    nombre: document.getElementById("f-inv")?.value || "",
+    estado: document.getElementById("f-inv-estado")?.value || "activos"
+  };
+}
+
 function filtrarInventariosLista() {
-  const fecha = document.getElementById("f-fecha")?.value || "";
-  const nombreInv = (document.getElementById("f-inv")?.value || "").toLowerCase();
+  const fecha = _invListaFilter.fecha;
+  const nombreInv = (_invListaFilter.nombre || "").toLowerCase();
+  const filtroEstado = _invListaFilter.estado || "activos";
   return state.inventarios.filter((i) => {
     const okFecha = !fecha || i.fecha === fecha;
     const okInv = !nombreInv || (i.nombre || "").toLowerCase().includes(nombreInv);
-    return okFecha && okInv;
+    const okEstado = inventarioCoincideFiltroEstado(i, filtroEstado);
+    return okFecha && okInv && okEstado;
   });
 }
 
 function renderInventarios() {
+  normalizarInventariosEstado();
+  if (_formularioInventarioActivo()) preservarBorradoresInventario();
+
   const el = document.getElementById("view-inventarios");
   const data = editingIds.inventario ? byId(state.inventarios, editingIds.inventario) : {};
   const inventarioActual = editingIds.inventario ? byId(state.inventarios, editingIds.inventario) : null;
   const detalles = inventarioActual?.detalles || [];
-  const unidadesMedida = ["Unidad", "Gramo", "Kilo", "Litro", "Mililitro"];
   const enModoCreacion = showCabeceraInventarioForm || showDetalleInventarioForm;
   const cabeceraFija = showDetalleInventarioForm && editingIds.inventario;
+  const cab = cabeceraFija
+    ? {
+        id: data?.id || "",
+        nombre: data?.nombre || "",
+        sucursalId: data?.sucursalId || state.sucursales.find((s) => s.nombre === data?.sucursal)?.id || "",
+        bodegaId: data?.bodegaId || "",
+        fecha: data?.fecha || new Date().toISOString().slice(0, 10)
+      }
+    : (_invCabeceraDraft || {
+        id: data?.id || uid("INV"),
+        nombre: data?.nombre || "",
+        sucursalId: data?.sucursalId || "",
+        bodegaId: data?.bodegaId || "",
+        fecha: data?.fecha || new Date().toISOString().slice(0, 10)
+      });
   const detalleEditando = editingIds.detalleInventario
     ? detalles.find((d) => d.id === editingIds.detalleInventario)
     : null;
+  const productoIdForm = detalleEditando?.productoId || _invDetalleDraft.productoId || "";
+  const cantidadForm = detalleEditando?.cantidad ?? _invDetalleDraft.cantidad ?? 0;
+  const prodDetForm = productoIdForm ? byId(state.productos, productoIdForm) : null;
+  const umDetForm = prodDetForm?.unidad || detalleEditando?.unidad || "—";
+  const stockDetForm = prodDetForm ? calcularStockVisible(prodDetForm) : "—";
   const iconEditar = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm14.71-9.96l-3-3 2-2c.39-.39 1.02-.39 1.41 0l2.59 2.59c.39.39.39 1.02 0 1.41l-2 2-1-1z"/></svg>`;
   const iconEliminar = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
 
-  const invSucursalIdActual = data?.sucursalId
-    || state.sucursales.find((s) => s.nombre === data?.sucursal)?.id
-    || "";
+  const invSucursalIdActual = cab.sucursalId || "";
   const invBodegasFiltradas = invSucursalIdActual
     ? state.bodegas.filter((b) => b.sucursalId === invSucursalIdActual)
     : state.bodegas;
@@ -1415,8 +1550,8 @@ function renderInventarios() {
           <legend>Datos del Inventario</legend>
           ${invSinSucursales && !cabeceraFija ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
           <div class="grid">
-            <label>Id<input id="inv-id" value="${data?.id || uid("INV")}" ${cabeceraFija ? "disabled" : ""} /></label>
-            <label>Nombre<input id="inv-nombre" value="${data?.nombre || ""}" ${cabeceraFija ? "disabled" : ""} /></label>
+            <label>Id<input id="inv-id" value="${cab.id}" ${cabeceraFija ? "disabled" : ""} /></label>
+            <label>Nombre<input id="inv-nombre" value="${cab.nombre}" ${cabeceraFija ? "disabled" : ""} /></label>
             <label>Sucursal
               <select id="inv-sucursal" ${cabeceraFija || invSinSucursales ? "disabled" : ""}>
                 <option value="">--</option>
@@ -1426,10 +1561,10 @@ function renderInventarios() {
             <label>Bodega
               <select id="inv-bodega" ${cabeceraFija ? "disabled" : ""}>
                 <option value="">--</option>
-                ${invBodegasFiltradas.map((b) => `<option value="${b.id}" ${data?.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
+                ${invBodegasFiltradas.map((b) => `<option value="${b.id}" ${cab.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
               </select>
             </label>
-            <label>Fecha<input type="date" id="inv-fecha" value="${data?.fecha || new Date().toISOString().slice(0, 10)}" ${cabeceraFija ? "disabled" : ""} /></label>
+            <label>Fecha<input type="date" id="inv-fecha" value="${cab.fecha}" ${cabeceraFija ? "disabled" : ""} /></label>
           </div>
           ${!cabeceraFija ? `
           <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -1442,44 +1577,47 @@ function renderInventarios() {
       ${showDetalleInventarioForm ? `
       <div class="card">
         <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-          <legend>Productos del Inventario</legend>
-          <div class="grid">
-            <label>Nombre
-              <select id="det-prod">
-                <option value="">--</option>
-                ${state.productos.map((p) => opcionProductoConStock(p, detalleEditando?.productoId)).join("")}
-              </select>
-              <span id="det-stock-info" class="stock-info">${detalleEditando?.productoId ? stockLabelProducto(detalleEditando.productoId) : ""}</span>
-            </label>
-            <label>Cantidad<input type="number" id="det-cantidad" value="${detalleEditando?.cantidad ?? 0}" /></label>
-            <label>Unidad de Medida
-              <select id="det-um">
-                <option value="">--</option>
-                ${unidadesMedida.map((u) => `<option ${detalleEditando?.unidad === u ? "selected" : ""}>${u}</option>`).join("")}
-              </select>
-            </label>
-          </div>
-          <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="det-agregar">${detalleEditando ? "Actualizar" : "Agregar"}</button>
-            <button type="button" id="det-guardar">Guardar</button>
+          <legend>Productos</legend>
+          <div class="inv-det-wrap">
+            <div class="inv-det-row">
+              <label class="inv-det-nombre">Nombre
+                <select id="det-prod">
+                  <option value="">--</option>
+                  ${state.productos.map((p) => opcionProductoNombre(p, productoIdForm)).join("")}
+                </select>
+              </label>
+              <label>Cantidad<input type="number" id="det-cantidad" value="${cantidadForm}" /></label>
+              <label>Unidad de Medida
+                <div id="det-um" class="stock-display">${umDetForm}</div>
+              </label>
+              <label>Stock
+                <div id="det-stock-info" class="stock-display">${stockDetForm}</div>
+              </label>
+              <div class="inv-add-cell">
+                <span class="inv-add-label" aria-hidden="true">&nbsp;</span>
+                <button type="button" class="btn-inv-add" id="det-agregar" title="${detalleEditando ? "Actualizar producto" : "Agregar producto"}">+</button>
+              </div>
+            </div>
           </div>
         </fieldset>
         <h4 style="margin-top:14px;">Movimientos ingresados</h4>
         <table>
           <thead>
-            <tr><th>Nombre</th><th>Stock</th><th>Cantidad</th><th>Unidad de Medida</th><th>Acciones</th></tr>
+            <tr><th>Nombre</th><th>Cantidad</th><th>Unidad de Medida</th><th>Stock</th><th>Acciones</th></tr>
           </thead>
           <tbody>
             ${detalles.length
               ? detalles.map((d) => {
                   const prod = byId(state.productos, d.productoId);
-                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td><td>${d.cantidad}</td><td>${d.unidad || ""}</td><td><button class="btn-icon btn-det-editar" data-id="${d.id}" title="Editar">${iconEditar}</button><button class="btn-icon danger btn-det-eliminar" data-id="${d.id}" title="Eliminar">${iconEliminar}</button></td></tr>`;
+                  const unidad = d.unidad || prod?.unidad || "";
+                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${d.cantidad}</td><td>${unidad}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td><td><button class="btn-icon btn-det-editar" data-id="${d.id}" title="Editar">${iconEditar}</button><button class="btn-icon danger btn-det-eliminar" data-id="${d.id}" title="Eliminar">${iconEliminar}</button></td></tr>`;
                 }).join("")
               : `<tr><td colspan="5" class="small">Sin movimientos ingresados.</td></tr>`}
           </tbody>
         </table>
         <div class="actions inv-salir-wrap">
-          <button type="button" id="inv-salir" class="btn-salir">Salir</button>
+          <button type="button" id="det-guardar">Guardar</button>
+          <button type="button" id="inv-salir">Salir</button>
         </div>
       </div>` : ""}
     `;
@@ -1500,9 +1638,14 @@ function renderInventarios() {
         }
       });
 
-      document.getElementById("inv-guardar").addEventListener("click", () => {
+      document.getElementById("inv-guardar").addEventListener("click", async () => {
         const sucursalId = document.getElementById("inv-sucursal").value;
         const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
+        const prev = byId(state.inventarios, document.getElementById("inv-id").value.trim());
+        if (prev?.estado === "anulado") {
+          toast("No se puede editar un inventario anulado", "warn");
+          return;
+        }
         const item = {
           id: document.getElementById("inv-id").value.trim(),
           nombre: document.getElementById("inv-nombre").value.trim(),
@@ -1510,16 +1653,18 @@ function renderInventarios() {
           sucursal: sucursalNombre,
           bodegaId: document.getElementById("inv-bodega").value,
           fecha: document.getElementById("inv-fecha").value,
-          detalles: data?.detalles || []
+          detalles: data?.detalles || [],
+          estado: prev?.estado === "cerrado" ? "cerrado" : "borrador"
         };
         if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
         if (!item.sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
         const i = state.inventarios.findIndex((x) => x.id === item.id);
-        if (i >= 0) state.inventarios[i] = item;
+        if (i >= 0) state.inventarios[i] = { ...state.inventarios[i], ...item };
         else state.inventarios.push(item);
         editingIds.inventario = item.id;
         showDetalleInventarioForm = true;
-        saveData();
+        _invCabeceraDraft = null;
+        await saveData();
         toast("Cabecera guardada. Ahora agrega productos.", "success");
         renderInventarios();
       });
@@ -1528,20 +1673,35 @@ function renderInventarios() {
     if (showDetalleInventarioForm) {
       const detProdSel = document.getElementById("det-prod");
       const detStockInfo = document.getElementById("det-stock-info");
-      if (detProdSel && detStockInfo) {
-        detProdSel.addEventListener("change", () => {
-          detStockInfo.textContent = detProdSel.value ? stockLabelProducto(detProdSel.value) : "";
-        });
+      const detUmInfo = document.getElementById("det-um");
+      const actualizarCamposDetalleProducto = () => {
+        const prod = byId(state.productos, detProdSel?.value);
+        if (detStockInfo) {
+          detStockInfo.textContent = prod ? calcularStockVisible(prod) : "—";
+        }
+        if (detUmInfo) {
+          detUmInfo.textContent = prod?.unidad || "—";
+        }
+      };
+      if (detProdSel) {
+        detProdSel.addEventListener("change", actualizarCamposDetalleProducto);
+        if (detProdSel.value) actualizarCamposDetalleProducto();
       }
 
-      const agregarProducto = () => {
-        if (!editingIds.inventario) { toast("No hay un inventario activo", "warn"); return; }
+      const agregarProducto = async () => {
+        if (!editingIds.inventario) { toast("No hay un inventario activo", "warn"); return false; }
         const inv = byId(state.inventarios, editingIds.inventario);
-        if (!inv) return;
+        if (!inv) return false;
+        if (inv.estado === "anulado") {
+          toast("Este inventario está anulado y no se puede modificar", "warn");
+          return false;
+        }
         const productoId = document.getElementById("det-prod").value;
         const cantidad = Number(document.getElementById("det-cantidad").value || 0);
-        const unidad = document.getElementById("det-um").value.trim();
-        if (!productoId) { toast("Selecciona producto", "warn"); return; }
+        const prodSel = byId(state.productos, productoId);
+        const unidad = prodSel?.unidad || "";
+        if (!productoId) { toast("Selecciona producto", "warn"); return false; }
+        if (!unidad) { toast("El producto no tiene unidad de medida definida", "warn"); return false; }
         if (!inv.detalles) inv.detalles = [];
         if (editingIds.detalleInventario) {
           const idx = inv.detalles.findIndex((d) => d.id === editingIds.detalleInventario);
@@ -1550,27 +1710,51 @@ function renderInventarios() {
         } else {
           inv.detalles.push({ id: uid("DET"), productoId, cantidad, unidad });
         }
-        saveData();
+        _invDetalleDraft = { productoId: "", cantidad: 0 };
+        await saveData();
         renderInventarios();
+        return true;
       };
 
-      document.getElementById("det-agregar").addEventListener("click", agregarProducto);
+      document.getElementById("det-agregar").addEventListener("click", () => { agregarProducto(); });
 
-      document.getElementById("det-guardar").addEventListener("click", () => {
-        const productoId = document.getElementById("det-prod").value;
-        if (productoId) agregarProducto();
+      document.getElementById("det-guardar").addEventListener("click", async () => {
+        const inv = byId(state.inventarios, editingIds.inventario);
+        if (!inv) { toast("No hay un inventario activo", "warn"); return; }
+        if (inv.estado === "anulado") {
+          toast("Este inventario está anulado", "warn");
+          return;
+        }
+        const draft = capturarInvDetalleDesdeDom();
+        if (draft.productoId) {
+          const ok = await agregarProducto();
+          if (!ok) return;
+        }
+        if (!(inv.detalles || []).length) {
+          toast("Agrega al menos un producto con + antes de guardar", "warn");
+          return;
+        }
+        inv.estado = "cerrado";
+        await saveData();
         showCabeceraInventarioForm = false;
         showDetalleInventarioForm = false;
         showVerInventario = false;
         editingIds.detalleInventario = null;
+        _invDetalleDraft = { productoId: "", cantidad: 0 };
+        _invCabeceraDraft = null;
+        toast("Inventario cerrado y guardado", "success");
         render();
       });
 
       document.getElementById("inv-salir")?.addEventListener("click", () => {
+        const draft = capturarInvDetalleDesdeDom();
+        if (draft.productoId && !confirmar("Hay un producto sin agregar con +. ¿Salir sin incluirlo?")) return;
         showCabeceraInventarioForm = false;
         showDetalleInventarioForm = false;
         showVerInventario = false;
         editingIds.detalleInventario = null;
+        _invDetalleDraft = { productoId: "", cantidad: 0 };
+        _invCabeceraDraft = null;
         renderInventarios();
       });
 
@@ -1580,13 +1764,14 @@ function renderInventarios() {
         renderInventarios();
       }));
 
-      document.querySelectorAll(".btn-det-eliminar").forEach((b) => b.addEventListener("click", (e) => {
+      document.querySelectorAll(".btn-det-eliminar").forEach((b) => b.addEventListener("click", async (e) => {
         e.stopPropagation();
         const inv = byId(state.inventarios, editingIds.inventario);
         if (!inv) return;
         inv.detalles = (inv.detalles || []).filter((d) => d.id !== b.dataset.id);
         if (editingIds.detalleInventario === b.dataset.id) editingIds.detalleInventario = null;
-        render();
+        await saveData();
+        renderInventarios();
       }));
     }
 
@@ -1596,24 +1781,39 @@ function renderInventarios() {
   const inventariosFiltrados = filtrarInventariosLista();
   const invVer = showVerInventario && inventarioActual ? inventarioActual : null;
   const detallesVer = invVer?.detalles || [];
+  const admin = esAdmin();
 
   el.innerHTML = `
     <div class="card">
       <h3>Filtros</h3>
-      <div class="grid">
-        <label>Fecha<input type="date" id="f-fecha"/></label>
-        <label>Nombre Inventario<input id="f-inv"/></label>
+      <div class="grid inv-lista-filtros">
+        <label>Fecha<input type="date" id="f-fecha" value="${_invListaFilter.fecha}" /></label>
+        <label>Nombre Inventario<input id="f-inv" value="${_invListaFilter.nombre}" /></label>
+        <label>Estado
+          <select id="f-inv-estado">
+            <option value="activos" ${_invListaFilter.estado === "activos" ? "selected" : ""}>Activos (sin anulados)</option>
+            <option value="borrador" ${_invListaFilter.estado === "borrador" ? "selected" : ""}>Borrador</option>
+            <option value="cerrado" ${_invListaFilter.estado === "cerrado" ? "selected" : ""}>Cerrado</option>
+            <option value="anulado" ${_invListaFilter.estado === "anulado" ? "selected" : ""}>Anulado</option>
+            <option value="todos" ${_invListaFilter.estado === "todos" ? "selected" : ""}>Todos</option>
+          </select>
+        </label>
       </div>
-      <div class="actions"><button type="button" id="aplicar-filtro">Aplicar filtros</button></div>
     </div>
     <div class="card">
-      <h3>Lista de inventarios</h3>
+      <h3>Lista de inventarios (${inventariosFiltrados.length}${inventariosFiltrados.length !== state.inventarios.length ? ` de ${state.inventarios.length}` : ""})</h3>
       ${inventariosFiltrados.length === 0
         ? '<p class="empty-state">No hay inventarios que coincidan con los filtros.</p>'
         : `<table>
-        <thead><tr><th>Id</th><th>Nombre</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th></tr></thead>
+        <thead><tr><th>Id</th><th>Nombre</th><th>Estado</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th>${admin ? "<th></th>" : ""}</tr></thead>
         <tbody>
-          ${inventariosFiltrados.map((i) => `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${i.id}</td><td>${i.nombre}</td><td>${i.sucursal || ""}</td><td>${byId(state.bodegas, i.bodegaId)?.nombre || ""}</td><td>${i.fecha}</td><td>${i.detalles?.length || 0}</td></tr>`).join("")}
+          ${inventariosFiltrados.map((i) => {
+            const estado = normalizarEstadoInventario(i);
+            const btnAnular = admin && estado !== "anulado"
+              ? `<button type="button" class="btn-link btn-inv-anular" data-id="${i.id}" title="Anular inventario">Anular</button>`
+              : "";
+            return `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${i.id}</td><td>${i.nombre}</td><td>${htmlBadgeEstadoInventario(estado)}</td><td>${i.sucursal || ""}</td><td>${byId(state.bodegas, i.bodegaId)?.nombre || ""}</td><td>${i.fecha}</td><td>${i.detalles?.length || 0}</td>${admin ? `<td>${btnAnular}</td>` : ""}</tr>`;
+          }).join("")}
         </tbody>
       </table>`}
     </div>
@@ -1629,6 +1829,7 @@ function renderInventarios() {
             <div><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${invVer.sucursal || byId(state.sucursales, invVer.sucursalId)?.nombre || "—"}</span></div>
             <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${byId(state.bodegas, invVer.bodegaId)?.nombre || "—"}</span></div>
             <div><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${invVer.fecha || ""}</span></div>
+            <div><span class="inv-dato-label">Estado</span><span class="inv-dato-valor">${htmlBadgeEstadoInventario(normalizarEstadoInventario(invVer))}</span></div>
           </div>
         </fieldset>
         <h4 style="margin-top:16px;">Movimientos ingresados</h4>
@@ -1636,17 +1837,20 @@ function renderInventarios() {
           ? '<p class="empty-state">Sin movimientos ingresados en este inventario.</p>'
           : `<table>
               <thead>
-                <tr><th>Nombre</th><th>Stock</th><th>Cantidad</th><th>Unidad de Medida</th></tr>
+                <tr><th>Nombre</th><th>Cantidad</th><th>Unidad de Medida</th><th>Stock</th></tr>
               </thead>
               <tbody>
                 ${detallesVer.map((d) => {
                   const prod = byId(state.productos, d.productoId);
-                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td><td>${d.cantidad}</td><td>${d.unidad || ""}</td></tr>`;
+                  const unidad = d.unidad || prod?.unidad || "";
+                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${d.cantidad}</td><td>${unidad}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td></tr>`;
                 }).join("")}
               </tbody>
             </table>`}
         <div class="actions inv-modal-actions">
-          <button type="button" id="inv-ver-editar">Editar</button>
+          ${normalizarEstadoInventario(invVer) !== "anulado"
+            ? '<button type="button" id="inv-ver-editar">Editar</button>'
+            : '<span class="small">Inventario anulado (solo lectura)</span>'}
           <button type="button" id="inv-ver-cerrar" class="btn-salir">Salir</button>
         </div>
       </div>
@@ -1662,9 +1866,36 @@ function renderInventarios() {
     renderInventarios();
   }));
 
-  document.getElementById("aplicar-filtro")?.addEventListener("click", () => {
+  const aplicarFiltroInvLista = () => {
+    sincronizarFiltroInvListaDesdeDom();
     renderInventarios();
+  };
+  ["f-fecha", "f-inv", "f-inv-estado"].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener("change", aplicarFiltroInvLista);
+    if (input.tagName === "INPUT") input.addEventListener("input", aplicarFiltroInvLista);
   });
+
+  document.querySelectorAll(".btn-inv-anular").forEach((btn) => btn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!esAdmin()) return;
+    const inv = byId(state.inventarios, btn.dataset.id);
+    if (!inv) return;
+    if (normalizarEstadoInventario(inv) === "anulado") return;
+    if (!confirmar(`¿Anular el inventario "${inv.nombre}"?\n\nNo se borrará; quedará marcado como anulado y podrás filtrarlo aparte.`)) return;
+    inv.estado = "anulado";
+    if (editingIds.inventario === inv.id) {
+      showCabeceraInventarioForm = false;
+      showDetalleInventarioForm = false;
+      showVerInventario = false;
+      editingIds.inventario = null;
+      editingIds.detalleInventario = null;
+    }
+    await saveData();
+    toast("Inventario anulado", "success");
+    renderInventarios();
+  }));
 
   document.getElementById("inv-ver-editar")?.addEventListener("click", () => {
     showVerInventario = false;
@@ -2018,6 +2249,8 @@ async function boot() {
   setupServiceWorker();
 
   window.DataLayer.setOnChange((nuevoState) => {
+    const invId = editingIds.inventario;
+    const invLocal = invId ? byId(state.inventarios, invId) : null;
     state.productos = nuevoState.productos;
     state.familias = nuevoState.familias;
     state.categorias = nuevoState.categorias;
@@ -2026,6 +2259,10 @@ async function boot() {
     state.movimientos = nuevoState.movimientos;
     state.inventarios = nuevoState.inventarios;
     state.recetas = nuevoState.recetas || {};
+    normalizarInventariosEstado();
+    if (invLocal && _formularioInventarioActivo()) {
+      fusionarInventarioEnEdicion(invLocal);
+    }
     if (window.Auth?.currentUser) {
       programarRender();
     }

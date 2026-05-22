@@ -244,9 +244,50 @@ th {
   background: transparent;
 }
 
+.inv-estado-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inv-estado-borrador {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.inv-estado-cerrado {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.inv-estado-anulado {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.btn-inv-anular {
+  color: #b45309;
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+
+.btn-inv-anular:hover {
+  text-decoration: underline;
+  opacity: 1;
+}
+
+.inv-lista-filtros {
+  grid-template-columns: auto 1fr auto;
+}
+
 .inv-salir-wrap {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid #e5e7eb;
@@ -440,6 +481,63 @@ th {
 }
 
 .btn-mov-add:hover {
+  background: #15803d;
+  opacity: 1;
+}
+
+.inv-det-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inv-det-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.inv-det-row > label {
+  flex: 1 1 120px;
+  min-width: 100px;
+}
+
+.inv-det-row > label.inv-det-nombre {
+  flex: 2 1 200px;
+  min-width: 180px;
+}
+
+.inv-det-row .inv-add-cell {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.inv-add-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.inv-add-label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  visibility: hidden;
+}
+
+.btn-inv-add {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 600;
+  background: #16a34a;
+  border-radius: 8px;
+}
+
+.btn-inv-add:hover {
   background: #15803d;
   opacity: 1;
 }
