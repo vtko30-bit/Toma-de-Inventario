@@ -309,6 +309,42 @@ function setRecetasLista(lista) {
   state.recetas = { version: 2, lista };
 }
 
+function nombresRecetasUnicos() {
+  return [...new Set(getRecetasLista().map((r) => (r.nombre || "").trim()).filter(Boolean))];
+}
+
+function htmlDatalistNombresRecetas() {
+  const nombres = nombresRecetasUnicos();
+  if (!nombres.length) return "";
+  return `<datalist id="prod-nombre-recetas">${nombres.map((n) => `<option value="${n.replace(/"/g, "&quot;")}"></option>`).join("")}</datalist>`;
+}
+
+function validarNombreProductoNormal(nombre, productoId) {
+  const n = (nombre || "").trim();
+  if (!n) return { ok: true };
+  const duplicado = state.productos.some(
+    (p) => p.id !== productoId && (p.nombre || "").trim().toLowerCase() === n.toLowerCase()
+  );
+  if (duplicado) {
+    return { ok: false, mensaje: "Ya existe un producto con ese nombre. Ingresa un nombre nuevo." };
+  }
+  return { ok: true };
+}
+
+function validarNombreProductoProcesado(nombre) {
+  const n = (nombre || "").trim();
+  if (!n) return { ok: true };
+  const nombresRec = nombresRecetasUnicos();
+  if (!nombresRec.length) {
+    return { ok: false, mensaje: "Crea al menos una receta en la vista Receta" };
+  }
+  const coincide = nombresRec.some((r) => r.toLowerCase() === n.toLowerCase());
+  if (!coincide) {
+    return { ok: false, mensaje: "Selecciona un nombre de la lista de recetas" };
+  }
+  return { ok: true };
+}
+
 function obtenerInsumosRecetaParaProducto(procesadoId) {
   const lista = getRecetasLista();
   const rec = lista.find((r) => r.productoProcesadoId === procesadoId);
@@ -495,40 +531,41 @@ function renderProductos() {
   const data = editingIds.producto ? byId(state.productos, editingIds.producto) : {};
   const soloLectura = !puedeEditarCatalogos();
   const dis = soloLectura ? "disabled" : "";
+  const esProcesado = data?.tipo === "Procesado";
+  const listRecetas = esProcesado ? ' list="prod-nombre-recetas"' : "";
 
   el.innerHTML = `
     ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>. Solo administradores pueden modificar productos.</div>' : ""}
     <div class="card">
       <h2>Producto</h2>
-      <div class="grid">
-        <label>Id<input id="prod-id" value="${data?.id || uid("PROD")}" /></label>
-        <label>Nombre<input id="prod-nombre" value="${data?.nombre || ""}" /></label>
-        <label>Precio<input type="number" id="prod-precio" value="${data?.precio ?? 0}" /></label>
-        <label>Cantidad<input type="number" id="prod-cantidad" value="${data?.cantidad ?? 0}" /></label>
-        <label>Unidad de medida
-          <select id="prod-um">
+      <input type="hidden" id="prod-id" value="${data?.id || uid("PROD")}" />
+      <div class="grid prod-form-grid">
+        <label class="prod-checkbox-field">Procesado
+          <input type="checkbox" id="prod-procesado" ${data?.tipo === "Procesado" ? "checked" : ""} ${dis} />
+        </label>
+        <label>Nombre<input id="prod-nombre" value="${data?.nombre || ""}"${listRecetas} ${dis} placeholder="${esProcesado ? "Nombre de receta" : ""}" /></label>
+        <label>Familia
+          <select id="prod-familia" ${dis}><option value="">--</option>${familiasOpts}</select>
+        </label>
+        <label>Categoría
+          <select id="prod-categoria" ${dis}><option value="">--</option>${categoriasOpts}</select>
+        </label>
+        <label>U. de Med.
+          <select id="prod-um" ${dis}>
             ${["Unidad", "Gramo", "Kilo", "Litro", "Mililitro"].map((u) => `<option ${data?.unidad === u ? "selected" : ""}>${u}</option>`).join("")}
           </select>
         </label>
-        <label>Tipo de Producto
-          <select id="prod-tipo">
-            <option ${data?.tipo === "Procesado" ? "selected" : ""}>Procesado</option>
-            <option ${data?.tipo !== "Procesado" ? "selected" : ""}>Normal</option>
-          </select>
-        </label>
-        <label>Familia
-          <select id="prod-familia"><option value="">--</option>${familiasOpts}</select>
-        </label>
-        <label>Categoría
-          <select id="prod-categoria"><option value="">--</option>${categoriasOpts}</select>
-        </label>
-        <label>Formato (por defecto)
-          <select id="prod-empaque">
+        <label>Formato
+          <select id="prod-empaque" ${dis}>
             ${TIPOS_EMPAQUE.map((e) => `<option ${(data?.empaque || "Unidad") === e ? "selected" : ""}>${e}</option>`).join("")}
           </select>
         </label>
+        <label>Precio<input type="number" id="prod-precio" value="${data?.precio ?? 0}" ${dis} /></label>
+      </div>
+      ${htmlDatalistNombresRecetas()}
+      <div class="grid prod-form-extra">
         <label id="prod-empaque-cant-wrap">Unidades por formato
-          <input type="number" id="prod-empaque-cant" min="1" step="any" value="${data?.cantidadPorEmpaque ?? (data?.empaque && data.empaque !== "Unidad" ? 1 : 1)}" />
+          <input type="number" id="prod-empaque-cant" min="1" step="any" value="${data?.cantidadPorEmpaque ?? (data?.empaque && data.empaque !== "Unidad" ? 1 : 1)}" ${dis} />
         </label>
       </div>
       <div class="actions">
@@ -562,6 +599,46 @@ function renderProductos() {
   prodEmpaqueSel.addEventListener("change", syncProdEmpaqueCant);
   syncProdEmpaqueCant();
 
+  const prodProcesado = document.getElementById("prod-procesado");
+  const prodNombre = document.getElementById("prod-nombre");
+  function syncProdNombreRecetaAutocomplete() {
+    if (!prodProcesado || !prodNombre) return;
+    if (prodProcesado.checked) {
+      prodNombre.setAttribute("list", "prod-nombre-recetas");
+      prodNombre.placeholder = nombresRecetasUnicos().length ? "Nombre de receta" : "Crea recetas primero";
+    } else {
+      prodNombre.removeAttribute("list");
+      prodNombre.placeholder = "";
+    }
+  }
+  function marcarNombreProductoInvalido(invalido) {
+    if (!prodNombre) return;
+    prodNombre.classList.toggle("input-invalido", invalido);
+  }
+
+  function validarProdNombreAlSalir() {
+    if (!prodNombre) return;
+    const nombre = prodNombre.value.trim();
+    const productoId = document.getElementById("prod-id")?.value?.trim() || "";
+    if (!nombre) {
+      marcarNombreProductoInvalido(false);
+      return;
+    }
+    const resultado = prodProcesado?.checked
+      ? validarNombreProductoProcesado(nombre)
+      : validarNombreProductoNormal(nombre, productoId);
+    marcarNombreProductoInvalido(!resultado.ok);
+    if (!resultado.ok) toast(resultado.mensaje, "warn");
+  }
+
+  prodProcesado?.addEventListener("change", () => {
+    syncProdNombreRecetaAutocomplete();
+    validarProdNombreAlSalir();
+  });
+  syncProdNombreRecetaAutocomplete();
+  prodNombre?.addEventListener("blur", validarProdNombreAlSalir);
+  prodNombre?.addEventListener("input", () => marcarNombreProductoInvalido(false));
+
   document.querySelectorAll(".row-producto").forEach((r) => {
     r.addEventListener("click", () => {
       editingIds.producto = r.dataset.id;
@@ -570,13 +647,15 @@ function renderProductos() {
   });
 
   document.getElementById("prod-guardar").addEventListener("click", () => {
+    const id = document.getElementById("prod-id").value.trim();
+    const prev = byId(state.productos, id);
     const item = {
-      id: document.getElementById("prod-id").value.trim(),
+      id,
       nombre: document.getElementById("prod-nombre").value.trim(),
       precio: Number(document.getElementById("prod-precio").value || 0),
-      cantidad: Number(document.getElementById("prod-cantidad").value || 0),
+      cantidad: prev?.cantidad ?? 0,
       unidad: document.getElementById("prod-um").value,
-      tipo: document.getElementById("prod-tipo").value,
+      tipo: document.getElementById("prod-procesado").checked ? "Procesado" : "Normal",
       familiaId: document.getElementById("prod-familia").value,
       categoriaId: document.getElementById("prod-categoria").value,
       empaque: document.getElementById("prod-empaque").value,
@@ -585,6 +664,14 @@ function renderProductos() {
         : Number(document.getElementById("prod-empaque-cant").value || 0)
     };
     if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
+    const validacionNombre = item.tipo === "Procesado"
+      ? validarNombreProductoProcesado(item.nombre)
+      : validarNombreProductoNormal(item.nombre, item.id);
+    if (!validacionNombre.ok) {
+      toast(validacionNombre.mensaje, "warn");
+      document.getElementById("prod-nombre")?.focus();
+      return;
+    }
     if (item.empaque !== "Unidad" && item.cantidadPorEmpaque <= 0) {
       toast("Indica cuántas unidades trae cada formato", "warn");
       return;
@@ -1587,7 +1674,7 @@ function renderInventarios() {
                 </select>
               </label>
               <label>Cantidad<input type="number" id="det-cantidad" value="${cantidadForm}" /></label>
-              <label>Unidad de Medida
+              <label>U. de Med.
                 <div id="det-um" class="stock-display">${umDetForm}</div>
               </label>
               <label>Stock
@@ -1603,7 +1690,7 @@ function renderInventarios() {
         <h4 style="margin-top:14px;">Movimientos ingresados</h4>
         <table>
           <thead>
-            <tr><th>Nombre</th><th>Cantidad</th><th>Unidad de Medida</th><th>Stock</th><th>Acciones</th></tr>
+            <tr><th>Nombre</th><th>Cantidad</th><th>U. de Med.</th><th>Stock</th><th>Acciones</th></tr>
           </thead>
           <tbody>
             ${detalles.length
@@ -1837,7 +1924,7 @@ function renderInventarios() {
           ? '<p class="empty-state">Sin movimientos ingresados en este inventario.</p>'
           : `<table>
               <thead>
-                <tr><th>Nombre</th><th>Cantidad</th><th>Unidad de Medida</th><th>Stock</th></tr>
+                <tr><th>Nombre</th><th>Cantidad</th><th>U. de Med.</th><th>Stock</th></tr>
               </thead>
               <tbody>
                 ${detallesVer.map((d) => {
