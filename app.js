@@ -389,6 +389,24 @@ function actualizarBotonNuevoInventario() {
   btn.style.display = activa === "inventarios" ? "" : "none";
 }
 
+function closeMobileNav() {
+  document.getElementById("sidebar")?.classList.remove("open");
+  document.getElementById("nav-backdrop")?.classList.remove("open");
+  const btn = document.getElementById("btnNavMenu");
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+
+function toggleMobileNav() {
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("nav-backdrop");
+  const btn = document.getElementById("btnNavMenu");
+  if (!sidebar || !backdrop || !btn) return;
+  const abrir = !sidebar.classList.contains("open");
+  sidebar.classList.toggle("open", abrir);
+  backdrop.classList.toggle("open", abrir);
+  btn.setAttribute("aria-expanded", abrir ? "true" : "false");
+}
+
 function navigateToView(viewId) {
   if (!viewId) return;
   document.querySelectorAll(".nav-btn").forEach((x) => {
@@ -397,8 +415,7 @@ function navigateToView(viewId) {
   document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
   const viewEl = document.getElementById(`view-${viewId}`);
   if (viewEl) viewEl.classList.add("active");
-  const navMobile = document.getElementById("nav-mobile-select");
-  if (navMobile && navMobile.value !== viewId) navMobile.value = viewId;
+  closeMobileNav();
   actualizarBotonNuevoInventario();
 }
 
@@ -406,12 +423,8 @@ function setupNav() {
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.addEventListener("click", () => navigateToView(btn.dataset.view));
   });
-  const navMobile = document.getElementById("nav-mobile-select");
-  if (navMobile) {
-    navMobile.addEventListener("change", () => navigateToView(navMobile.value));
-    const activa = document.querySelector(".nav-btn.active")?.dataset.view || "dashboard";
-    navMobile.value = activa;
-  }
+  document.getElementById("btnNavMenu")?.addEventListener("click", toggleMobileNav);
+  document.getElementById("nav-backdrop")?.addEventListener("click", closeMobileNav);
 }
 
 let _charts = {};
@@ -2198,20 +2211,8 @@ function setupAuthUI() {
 function aplicarVisibilidadAdmin() {
   const esAdmin = window.Auth?.isAdmin();
   document.querySelectorAll('[data-admin-only="true"]').forEach((el) => {
-    if (el.tagName === "OPTION") {
-      el.hidden = !esAdmin;
-      el.disabled = !esAdmin;
-    } else {
-      el.style.display = esAdmin ? "" : "none";
-    }
+    el.style.display = esAdmin ? "" : "none";
   });
-  const navMobile = document.getElementById("nav-mobile-select");
-  if (navMobile && !esAdmin) {
-    const visibles = [...navMobile.options].filter((o) => !o.hidden && !o.disabled);
-    if (!visibles.some((o) => o.value === navMobile.value)) {
-      navigateToView("dashboard");
-    }
-  }
 }
 
 function setupUserMenu() {

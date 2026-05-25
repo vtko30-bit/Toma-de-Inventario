@@ -37,24 +37,10 @@
 
   <div id="app-shell" style="display:none;">
     <header class="topbar">
-      <div class="topbar-left">
-        <h1>Control de Inventario</h1>
-        <div class="nav-mobile-wrap">
-          <select id="nav-mobile-select" class="nav-mobile-select" aria-label="Menú de navegación">
-            <option value="dashboard">Dashboard</option>
-            <option value="productos">Productos</option>
-            <option value="recetas" data-admin-only="true">Receta</option>
-            <option value="familias" data-admin-only="true">Familias</option>
-            <option value="categorias" data-admin-only="true">Categorías</option>
-            <option value="sucursales" data-admin-only="true">Sucursales</option>
-            <option value="bodegas" data-admin-only="true">Bodegas</option>
-            <option value="movimientos">Movimientos de inventario</option>
-            <option value="inventarios">Toma de Inventario</option>
-            <option value="usuarios" data-admin-only="true">Usuarios</option>
-          </select>
-        </div>
-      </div>
-      <div class="topbar-actions">
+      <h1 class="topbar-title">Control de Inventario</h1>
+      <div class="topbar-toolbar">
+        <button type="button" id="btnNavMenu" class="btn-nav-menu" aria-expanded="false" aria-controls="sidebar">Menú</button>
+        <div class="topbar-actions">
         <button id="btnNuevoInventarioTop" style="display:none;">Nuevo Inventario</button>
         <div class="dropdown" id="exportDropdown">
           <button id="btnExport">Exportar</button>
@@ -70,11 +56,13 @@
             <button id="btnLogout">Cerrar sesión</button>
           </div>
         </div>
+        </div>
       </div>
     </header>
+    <div id="nav-backdrop" class="nav-backdrop" aria-hidden="true"></div>
 
     <main class="layout">
-      <nav class="sidebar">
+      <nav id="sidebar" class="sidebar">
         <button class="nav-btn active" data-view="dashboard">Dashboard</button>
         <button class="nav-btn" data-view="productos">Productos</button>
         <button class="nav-btn" data-view="recetas" data-admin-only="true">Receta</button>

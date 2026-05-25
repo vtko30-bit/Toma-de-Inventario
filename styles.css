@@ -11,46 +11,53 @@ body {
 
 .topbar {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 14px 18px;
   background: #0f172a;
   color: #fff;
 }
 
-.topbar-left {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.topbar h1 {
+.topbar-title {
   margin: 0;
   font-size: 1.3rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.topbar-toolbar {
+  display: contents;
+}
+
+.btn-nav-menu {
+  display: none;
+  background: #1e293b;
+  border: 1px solid #475569;
+  padding: 8px 14px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .topbar-actions {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.nav-mobile-wrap {
+.nav-backdrop {
   display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 1090;
 }
 
-.nav-mobile-select {
-  width: 100%;
-  max-width: 100%;
-  padding: 10px 12px;
-  font-size: 1rem;
-  border-radius: 8px;
-  border: 1px solid #475569;
-  background: #1e293b;
-  color: #fff;
-  cursor: pointer;
+.nav-backdrop.open {
+  display: block;
 }
 
 button {
@@ -743,26 +750,46 @@ th {
 
   .sidebar {
     display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 85vw);
+    z-index: 1100;
+    overflow-y: auto;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
   }
 
-  .nav-mobile-wrap {
-    display: block;
+  .sidebar.open {
+    display: flex;
   }
 
   .topbar {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
     gap: 10px;
-    align-items: flex-start;
   }
 
-  .topbar h1 {
-    font-size: 1.1rem;
+  .topbar-title {
+    font-size: 1.05rem;
+    width: 100%;
+  }
+
+  .topbar-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .btn-nav-menu {
+    display: inline-flex;
   }
 
   .topbar-actions {
-    width: 100%;
+    flex: 1 1 auto;
     justify-content: flex-end;
-    flex-wrap: wrap;
   }
 
   .content {
