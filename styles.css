@@ -18,6 +18,14 @@ body {
   color: #fff;
 }
 
+.topbar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
 .topbar h1 {
   margin: 0;
   font-size: 1.3rem;
@@ -26,6 +34,23 @@ body {
 .topbar-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.nav-mobile-wrap {
+  display: none;
+}
+
+.nav-mobile-select {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px 12px;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #fff;
+  cursor: pointer;
 }
 
 button {
@@ -717,7 +742,30 @@ th {
   }
 
   .sidebar {
-    flex-direction: row;
-    overflow: auto;
+    display: none;
+  }
+
+  .nav-mobile-wrap {
+    display: block;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .topbar h1 {
+    font-size: 1.1rem;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .content {
+    padding: 12px;
   }
 }

@@ -37,7 +37,23 @@
 
   <div id="app-shell" style="display:none;">
     <header class="topbar">
-      <h1>Control de Inventario</h1>
+      <div class="topbar-left">
+        <h1>Control de Inventario</h1>
+        <div class="nav-mobile-wrap">
+          <select id="nav-mobile-select" class="nav-mobile-select" aria-label="Menú de navegación">
+            <option value="dashboard">Dashboard</option>
+            <option value="productos">Productos</option>
+            <option value="recetas" data-admin-only="true">Receta</option>
+            <option value="familias" data-admin-only="true">Familias</option>
+            <option value="categorias" data-admin-only="true">Categorías</option>
+            <option value="sucursales" data-admin-only="true">Sucursales</option>
+            <option value="bodegas" data-admin-only="true">Bodegas</option>
+            <option value="movimientos">Movimientos de inventario</option>
+            <option value="inventarios">Toma de Inventario</option>
+            <option value="usuarios" data-admin-only="true">Usuarios</option>
+          </select>
+        </div>
+      </div>
       <div class="topbar-actions">
         <button id="btnNuevoInventarioTop" style="display:none;">Nuevo Inventario</button>
         <div class="dropdown" id="exportDropdown">

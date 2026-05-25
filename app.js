@@ -389,16 +389,29 @@ function actualizarBotonNuevoInventario() {
   btn.style.display = activa === "inventarios" ? "" : "none";
 }
 
+function navigateToView(viewId) {
+  if (!viewId) return;
+  document.querySelectorAll(".nav-btn").forEach((x) => {
+    x.classList.toggle("active", x.dataset.view === viewId);
+  });
+  document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
+  const viewEl = document.getElementById(`view-${viewId}`);
+  if (viewEl) viewEl.classList.add("active");
+  const navMobile = document.getElementById("nav-mobile-select");
+  if (navMobile && navMobile.value !== viewId) navMobile.value = viewId;
+  actualizarBotonNuevoInventario();
+}
+
 function setupNav() {
   document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".nav-btn").forEach((x) => x.classList.remove("active"));
-      document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
-      btn.classList.add("active");
-      document.getElementById(`view-${btn.dataset.view}`).classList.add("active");
-      actualizarBotonNuevoInventario();
-    });
+    btn.addEventListener("click", () => navigateToView(btn.dataset.view));
   });
+  const navMobile = document.getElementById("nav-mobile-select");
+  if (navMobile) {
+    navMobile.addEventListener("change", () => navigateToView(navMobile.value));
+    const activa = document.querySelector(".nav-btn.active")?.dataset.view || "dashboard";
+    navMobile.value = activa;
+  }
 }
 
 let _charts = {};
@@ -2086,8 +2099,9 @@ function setupAuthUI() {
   const modeLabel = document.getElementById("auth-mode-label");
 
   modeLabel.textContent = window.SUPABASE_ENABLED
-    ? "Modo multiusuario (Supabase) — sesión sincronizada en la nube"
+    ? ""
     : "Modo local — los usuarios se guardan en este dispositivo";
+  modeLabel.style.display = modeLabel.textContent ? "" : "none";
 
   let modoRegistro = false;
 
@@ -2184,8 +2198,20 @@ function setupAuthUI() {
 function aplicarVisibilidadAdmin() {
   const esAdmin = window.Auth?.isAdmin();
   document.querySelectorAll('[data-admin-only="true"]').forEach((el) => {
-    el.style.display = esAdmin ? "" : "none";
+    if (el.tagName === "OPTION") {
+      el.hidden = !esAdmin;
+      el.disabled = !esAdmin;
+    } else {
+      el.style.display = esAdmin ? "" : "none";
+    }
   });
+  const navMobile = document.getElementById("nav-mobile-select");
+  if (navMobile && !esAdmin) {
+    const visibles = [...navMobile.options].filter((o) => !o.hidden && !o.disabled);
+    if (!visibles.some((o) => o.value === navMobile.value)) {
+      navigateToView("dashboard");
+    }
+  }
 }
 
 function setupUserMenu() {
