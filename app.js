@@ -1714,7 +1714,8 @@ function renderInventarios() {
           </div>
         </fieldset>
         <h4 style="margin-top:14px;">Movimientos ingresados</h4>
-        <table>
+        <div class="table-scroll">
+        <table class="inv-detalle-table">
           <thead>
             <tr><th>Nombre</th><th>Cantidad</th><th>U. de Med.</th><th>Stock</th><th>Acciones</th></tr>
           </thead>
@@ -1728,6 +1729,7 @@ function renderInventarios() {
               : `<tr><td colspan="5" class="small">Sin movimientos ingresados.</td></tr>`}
           </tbody>
         </table>
+        </div>
         <div class="actions inv-salir-wrap">
           <button type="button" id="det-guardar">Guardar</button>
           <button type="button" id="inv-salir">Salir</button>
@@ -1917,7 +1919,7 @@ function renderInventarios() {
       <h3>Lista de inventarios (${inventariosFiltrados.length}${inventariosFiltrados.length !== state.inventarios.length ? ` de ${state.inventarios.length}` : ""})</h3>
       ${inventariosFiltrados.length === 0
         ? '<p class="empty-state">No hay inventarios que coincidan con los filtros.</p>'
-        : `<table>
+        : `<div class="table-scroll"><table class="inv-lista-table">
         <thead><tr><th>Id</th><th>Nombre</th><th>Estado</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th>${admin ? "<th></th>" : ""}</tr></thead>
         <tbody>
           ${inventariosFiltrados.map((i) => {
@@ -1928,7 +1930,7 @@ function renderInventarios() {
             return `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${i.id}</td><td>${i.nombre}</td><td>${htmlBadgeEstadoInventario(estado)}</td><td>${i.sucursal || ""}</td><td>${byId(state.bodegas, i.bodegaId)?.nombre || ""}</td><td>${i.fecha}</td><td>${i.detalles?.length || 0}</td>${admin ? `<td>${btnAnular}</td>` : ""}</tr>`;
           }).join("")}
         </tbody>
-      </table>`}
+      </table></div>`}
     </div>
     ${invVer ? `
     <div class="inv-modal-overlay" id="inv-modal-overlay">
@@ -1948,7 +1950,7 @@ function renderInventarios() {
         <h4 style="margin-top:16px;">Movimientos ingresados</h4>
         ${detallesVer.length === 0
           ? '<p class="empty-state">Sin movimientos ingresados en este inventario.</p>'
-          : `<table>
+          : `<div class="table-scroll"><table class="inv-detalle-table">
               <thead>
                 <tr><th>Nombre</th><th>Cantidad</th><th>U. de Med.</th><th>Stock</th></tr>
               </thead>
@@ -1959,7 +1961,7 @@ function renderInventarios() {
                   return `<tr><td>${prod?.nombre || d.productoId}</td><td>${d.cantidad}</td><td>${unidad}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td></tr>`;
                 }).join("")}
               </tbody>
-            </table>`}
+            </table></div>`}
         <div class="actions inv-modal-actions">
           ${normalizarEstadoInventario(invVer) !== "anulado"
             ? '<button type="button" id="inv-ver-editar">Editar</button>'

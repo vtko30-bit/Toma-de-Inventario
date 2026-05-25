@@ -98,10 +98,20 @@ button:hover {
 
 .content {
   padding: 18px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .view {
   display: none;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .view.active {
@@ -319,6 +329,15 @@ th {
 
 .inv-lista-filtros {
   grid-template-columns: auto 1fr auto;
+}
+
+#view-inventarios input,
+#view-inventarios select {
+  max-width: 100%;
+}
+
+#view-inventarios fieldset {
+  min-width: 0;
 }
 
 .inv-salir-wrap {
@@ -794,5 +813,59 @@ th {
 
   .content {
     padding: 12px;
+  }
+
+  .inv-lista-filtros {
+    grid-template-columns: 1fr;
+  }
+
+  .inv-det-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inv-det-row > label,
+  .inv-det-row > label.inv-det-nombre {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .inv-det-row .inv-add-cell {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+
+  .inv-datos-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inv-modal {
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 12px;
+  }
+
+  .inv-modal-overlay {
+    padding: 10px;
+    align-items: flex-end;
+  }
+
+  .inv-modal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inv-modal-actions .btn-salir {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  #view-inventarios .inv-lista-table {
+    min-width: 520px;
+  }
+
+  #view-inventarios .inv-detalle-table {
+    min-width: 400px;
   }
 }
