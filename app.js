@@ -1616,7 +1616,6 @@ function filtrarInventariosLista() {
 
 function renderInventarios() {
   normalizarInventariosEstado();
-  if (_formularioInventarioActivo()) preservarBorradoresInventario();
 
   const el = document.getElementById("view-inventarios");
   const data = editingIds.inventario ? byId(state.inventarios, editingIds.inventario) : {};
@@ -1662,22 +1661,26 @@ function renderInventarios() {
         <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
           <legend>Datos del Inventario</legend>
           ${invSinSucursales && !cabeceraFija ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
-          <div class="grid">
-            <input type="hidden" id="inv-id" value="${cab.id}" />
-            <label>Nombre<input id="inv-nombre" value="${cab.nombre}" ${cabeceraFija ? "disabled" : ""} /></label>
-            <label>Sucursal
-              <select id="inv-sucursal" ${cabeceraFija || invSinSucursales ? "disabled" : ""}>
-                <option value="">--</option>
-                ${state.sucursales.map((s) => `<option value="${s.id}" ${invSucursalIdActual === s.id ? "selected" : ""}>${s.nombre}</option>`).join("")}
-              </select>
-            </label>
-            <label>Bodega
-              <select id="inv-bodega" ${cabeceraFija ? "disabled" : ""}>
-                <option value="">--</option>
-                ${invBodegasFiltradas.map((b) => `<option value="${b.id}" ${cab.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
-              </select>
-            </label>
-            <label>Fecha<input type="date" id="inv-fecha" value="${cab.fecha}" ${cabeceraFija ? "disabled" : ""} /></label>
+          <input type="hidden" id="inv-id" value="${cab.id}" />
+          <div class="inv-cabecera-grid">
+            <div class="inv-cabecera-row">
+              <label class="inv-cab-fecha">Fecha<input type="date" id="inv-fecha" value="${cab.fecha}" ${cabeceraFija ? "disabled" : ""} /></label>
+              <label class="inv-cab-nombre">Nombre<input id="inv-nombre" value="${cab.nombre}" ${cabeceraFija ? "disabled" : ""} /></label>
+            </div>
+            <div class="inv-cabecera-row">
+              <label class="inv-cab-sucursal">Sucursal
+                <select id="inv-sucursal" ${cabeceraFija || invSinSucursales ? "disabled" : ""}>
+                  <option value="">--</option>
+                  ${state.sucursales.map((s) => `<option value="${s.id}" ${invSucursalIdActual === s.id ? "selected" : ""}>${s.nombre}</option>`).join("")}
+                </select>
+              </label>
+              <label class="inv-cab-bodega">Bodega
+                <select id="inv-bodega" ${cabeceraFija ? "disabled" : ""}>
+                  <option value="">--</option>
+                  ${invBodegasFiltradas.map((b) => `<option value="${b.id}" ${cab.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
+                </select>
+              </label>
+            </div>
           </div>
           ${!cabeceraFija ? `
           <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">

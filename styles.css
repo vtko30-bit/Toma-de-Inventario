@@ -340,6 +340,38 @@ th {
   min-width: 0;
 }
 
+.inv-cabecera-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inv-cabecera-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+#view-inventarios .inv-cab-fecha input[type="date"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 901px) {
+  .inv-cabecera-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    align-items: end;
+  }
+
+  .inv-cabecera-row {
+    display: contents;
+  }
+}
+
 .inv-salir-wrap {
   display: flex;
   justify-content: flex-end;
