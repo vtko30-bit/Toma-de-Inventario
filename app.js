@@ -1663,7 +1663,7 @@ function renderInventarios() {
           <legend>Datos del Inventario</legend>
           ${invSinSucursales && !cabeceraFija ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
           <div class="grid">
-            <label>Id<input id="inv-id" value="${cab.id}" ${cabeceraFija ? "disabled" : ""} /></label>
+            <input type="hidden" id="inv-id" value="${cab.id}" />
             <label>Nombre<input id="inv-nombre" value="${cab.nombre}" ${cabeceraFija ? "disabled" : ""} /></label>
             <label>Sucursal
               <select id="inv-sucursal" ${cabeceraFija || invSinSucursales ? "disabled" : ""}>
@@ -1771,7 +1771,7 @@ function renderInventarios() {
           detalles: data?.detalles || [],
           estado: prev?.estado === "cerrado" ? "cerrado" : "borrador"
         };
-        if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
+        if (!item.nombre) { toast("El nombre es obligatorio", "warn"); return; }
         if (!item.sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
         const i = state.inventarios.findIndex((x) => x.id === item.id);
         if (i >= 0) state.inventarios[i] = { ...state.inventarios[i], ...item };
@@ -1920,14 +1920,14 @@ function renderInventarios() {
       ${inventariosFiltrados.length === 0
         ? '<p class="empty-state">No hay inventarios que coincidan con los filtros.</p>'
         : `<div class="table-scroll"><table class="inv-lista-table">
-        <thead><tr><th>Id</th><th>Nombre</th><th>Estado</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th>${admin ? "<th></th>" : ""}</tr></thead>
+        <thead><tr><th>Nombre</th><th>Estado</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th>${admin ? "<th></th>" : ""}</tr></thead>
         <tbody>
           ${inventariosFiltrados.map((i) => {
             const estado = normalizarEstadoInventario(i);
             const btnAnular = admin && estado !== "anulado"
               ? `<button type="button" class="btn-link btn-inv-anular" data-id="${i.id}" title="Anular inventario">Anular</button>`
               : "";
-            return `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${i.id}</td><td>${i.nombre}</td><td>${htmlBadgeEstadoInventario(estado)}</td><td>${i.sucursal || ""}</td><td>${byId(state.bodegas, i.bodegaId)?.nombre || ""}</td><td>${i.fecha}</td><td>${i.detalles?.length || 0}</td>${admin ? `<td>${btnAnular}</td>` : ""}</tr>`;
+            return `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${i.nombre}</td><td>${htmlBadgeEstadoInventario(estado)}</td><td>${i.sucursal || ""}</td><td>${byId(state.bodegas, i.bodegaId)?.nombre || ""}</td><td>${i.fecha}</td><td>${i.detalles?.length || 0}</td>${admin ? `<td>${btnAnular}</td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table></div>`}
@@ -1939,7 +1939,6 @@ function renderInventarios() {
         <fieldset class="inv-modal-fieldset">
           <legend>Datos del Inventario</legend>
           <div class="inv-datos-grid">
-            <div><span class="inv-dato-label">Id</span><span class="inv-dato-valor">${invVer.id}</span></div>
             <div><span class="inv-dato-label">Nombre</span><span class="inv-dato-valor">${invVer.nombre}</span></div>
             <div><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${invVer.sucursal || byId(state.sucursales, invVer.sucursalId)?.nombre || "—"}</span></div>
             <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${byId(state.bodegas, invVer.bodegaId)?.nombre || "—"}</span></div>
