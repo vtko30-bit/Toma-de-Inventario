@@ -359,6 +359,32 @@ th {
   box-sizing: border-box;
 }
 
+.inv-bodega-nueva {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.inv-bodega-nueva input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.inv-bodega-nueva button {
+  flex: 0 0 auto;
+  background: #16a34a;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.inv-bodega-toggle {
+  margin-top: 4px;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
 @media (min-width: 901px) {
   .inv-cabecera-grid {
     display: grid;

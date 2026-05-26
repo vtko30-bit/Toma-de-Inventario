@@ -1602,6 +1602,111 @@ function sincronizarFiltroInvListaDesdeDom() {
   };
 }
 
+function bodegasPorSucursal(sucursalId) {
+  return sucursalId ? state.bodegas.filter((b) => b.sucursalId === sucursalId) : [];
+}
+
+function opcionesSelectBodegas(bodegas, selectedId) {
+  return `<option value="">--</option>` + bodegas.map((b) =>
+    `<option value="${b.id}" ${selectedId === b.id ? "selected" : ""}>${b.nombre}</option>`
+  ).join("");
+}
+
+async function crearBodegaInventario(nombre, sucursalId) {
+  const trimmed = (nombre || "").trim();
+  if (!sucursalId) {
+    toast("Selecciona una sucursal primero", "warn");
+    return null;
+  }
+  if (!trimmed) {
+    toast("Escribe el nombre de la bodega", "warn");
+    return null;
+  }
+  const duplicada = state.bodegas.some(
+    (b) => b.sucursalId === sucursalId && (b.nombre || "").toLowerCase() === trimmed.toLowerCase()
+  );
+  if (duplicada) {
+    toast("Ya existe una bodega con ese nombre en la sucursal", "warn");
+    return null;
+  }
+  const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
+  const item = { id: uid("BOD"), nombre: trimmed, sucursalId, sucursal: sucursalNombre };
+  state.bodegas.push(item);
+  await saveData();
+  toast("Bodega creada", "success");
+  return item;
+}
+
+function setupInvBodegaControls(cabeceraFija) {
+  if (cabeceraFija) return;
+  const invSucSel = document.getElementById("inv-sucursal");
+  const select = document.getElementById("inv-bodega");
+  const bloqueNueva = document.getElementById("inv-bodega-nueva");
+  const toggle = document.getElementById("inv-bodega-toggle");
+  const inputNombre = document.getElementById("inv-bodega-nombre");
+  const btnAgregar = document.getElementById("inv-bodega-agregar");
+  if (!select) return;
+
+  const actualizarUiBodega = () => {
+    const sucursalId = invSucSel?.value || "";
+    const filtradas = bodegasPorSucursal(sucursalId);
+    const prev = select.value;
+    const prevValido = filtradas.some((b) => b.id === prev);
+    select.innerHTML = opcionesSelectBodegas(filtradas, prevValido ? prev : "");
+    if (!sucursalId || !filtradas.length) {
+      select.value = "";
+      select.disabled = true;
+      select.removeAttribute("required");
+    } else {
+      select.disabled = false;
+      select.setAttribute("required", "");
+    }
+    if (toggle) toggle.style.display = sucursalId && filtradas.length ? "" : "none";
+    if (!bloqueNueva) return;
+    if (!sucursalId) {
+      bloqueNueva.style.display = "none";
+      bloqueNueva.dataset.expanded = "0";
+      return;
+    }
+    if (!filtradas.length) {
+      bloqueNueva.style.display = "";
+      bloqueNueva.dataset.expanded = "1";
+      return;
+    }
+    bloqueNueva.style.display = bloqueNueva.dataset.expanded === "1" ? "" : "none";
+  };
+
+  const agregarBodega = async () => {
+    const sucursalId = invSucSel?.value || "";
+    const item = await crearBodegaInventario(inputNombre?.value || "", sucursalId);
+    if (!item) return;
+    if (inputNombre) inputNombre.value = "";
+    if (bloqueNueva) bloqueNueva.dataset.expanded = "0";
+    actualizarUiBodega();
+    select.value = item.id;
+  };
+
+  invSucSel?.addEventListener("change", () => {
+    if (bloqueNueva) bloqueNueva.dataset.expanded = "0";
+    actualizarUiBodega();
+  });
+  toggle?.addEventListener("click", () => {
+    if (!bloqueNueva) return;
+    const abrir = bloqueNueva.style.display === "none";
+    bloqueNueva.style.display = abrir ? "" : "none";
+    bloqueNueva.dataset.expanded = abrir ? "1" : "0";
+    if (abrir) inputNombre?.focus();
+  });
+  btnAgregar?.addEventListener("click", agregarBodega);
+  inputNombre?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      agregarBodega();
+    }
+  });
+  actualizarUiBodega();
+}
+
 function filtrarInventariosLista() {
   const fecha = _invListaFilter.fecha;
   const nombreInv = (_invListaFilter.nombre || "").toLowerCase();
@@ -1650,10 +1755,9 @@ function renderInventarios() {
   const iconEliminar = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
 
   const invSucursalIdActual = cab.sucursalId || "";
-  const invBodegasFiltradas = invSucursalIdActual
-    ? state.bodegas.filter((b) => b.sucursalId === invSucursalIdActual)
-    : state.bodegas;
+  const invBodegasFiltradas = bodegasPorSucursal(invSucursalIdActual);
   const invSinSucursales = state.sucursales.length === 0;
+  const invSinBodegasSucursal = !!invSucursalIdActual && invBodegasFiltradas.length === 0;
 
   if (enModoCreacion) {
     el.innerHTML = `
@@ -1675,10 +1779,16 @@ function renderInventarios() {
                 </select>
               </label>
               <label class="inv-cab-bodega">Bodega
-                <select id="inv-bodega" ${cabeceraFija ? "disabled" : "required"}>
-                  <option value="">--</option>
-                  ${invBodegasFiltradas.map((b) => `<option value="${b.id}" ${cab.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
+                <select id="inv-bodega" ${cabeceraFija ? "disabled" : (invBodegasFiltradas.length ? "required" : "disabled")}>
+                  ${opcionesSelectBodegas(invBodegasFiltradas, cab.bodegaId)}
                 </select>
+                ${!cabeceraFija ? `
+                <div id="inv-bodega-nueva" class="inv-bodega-nueva"${invSinBodegasSucursal ? "" : ' style="display:none"'}>
+                  <input type="text" id="inv-bodega-nombre" placeholder="Nombre de la bodega" autocomplete="off" />
+                  <button type="button" id="inv-bodega-agregar">Agregar</button>
+                </div>
+                ${invBodegasFiltradas.length ? '<button type="button" id="inv-bodega-toggle" class="btn-link inv-bodega-toggle">+ Nueva bodega</button>' : ""}
+                ` : ""}
               </label>
             </div>
           </div>
@@ -1745,15 +1855,7 @@ function renderInventarios() {
     `;
 
     if (showCabeceraInventarioForm && !cabeceraFija) {
-      const invSucSel = document.getElementById("inv-sucursal");
-      if (invSucSel) {
-        invSucSel.addEventListener("change", () => {
-          const nuevaSucId = invSucSel.value;
-          const select = document.getElementById("inv-bodega");
-          const filtradas = nuevaSucId ? state.bodegas.filter((b) => b.sucursalId === nuevaSucId) : state.bodegas;
-          select.innerHTML = `<option value="">--</option>` + filtradas.map((b) => `<option value="${b.id}">${b.nombre}</option>`).join("");
-        });
-      }
+      setupInvBodegaControls(cabeceraFija);
       document.getElementById("inv-cancelar")?.addEventListener("click", () => {
         if (confirmar("¿Cancelar la creación del inventario? No se guardará.")) {
           cancelarInventarioCreacion();
@@ -1780,7 +1882,7 @@ function renderInventarios() {
         };
         if (!item.nombre) { toast("El nombre es obligatorio", "warn"); return; }
         if (!item.sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
-        if (!item.bodegaId) { toast("Selecciona una bodega", "warn"); return; }
+        if (!item.bodegaId) { toast("Selecciona o agrega una bodega", "warn"); return; }
         const i = state.inventarios.findIndex((x) => x.id === item.id);
         if (i >= 0) state.inventarios[i] = { ...state.inventarios[i], ...item };
         else state.inventarios.push(item);
