@@ -1695,23 +1695,27 @@ function renderInventarios() {
         <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
           <legend>Productos</legend>
           <div class="inv-det-wrap">
-            <div class="inv-det-row">
-              <label class="inv-det-nombre">Nombre
-                <select id="det-prod">
-                  <option value="">--</option>
-                  ${state.productos.map((p) => opcionProductoNombre(p, productoIdForm)).join("")}
-                </select>
-              </label>
-              <label>Cantidad<input type="number" id="det-cantidad" value="${cantidadForm}" /></label>
-              <label>U. de Med.
-                <div id="det-um" class="stock-display">${umDetForm}</div>
-              </label>
-              <label>Stock
-                <div id="det-stock-info" class="stock-display">${stockDetForm}</div>
-              </label>
-              <div class="inv-add-cell">
-                <span class="inv-add-label" aria-hidden="true">&nbsp;</span>
-                <button type="button" class="btn-inv-add" id="det-agregar" title="${detalleEditando ? "Actualizar producto" : "Agregar producto"}">+</button>
+            <div class="inv-det-grid">
+              <div class="inv-det-row">
+                <label class="inv-det-nombre">Nombre
+                  <select id="det-prod">
+                    <option value="">--</option>
+                    ${state.productos.map((p) => opcionProductoNombre(p, productoIdForm)).join("")}
+                  </select>
+                </label>
+                <label class="inv-det-cantidad">Cantidad<input type="number" id="det-cantidad" value="${cantidadForm}" /></label>
+              </div>
+              <div class="inv-det-row inv-det-row-meta">
+                <label class="inv-det-um">U. de Med.
+                  <div id="det-um" class="stock-display">${umDetForm}</div>
+                </label>
+                <label class="inv-det-stock">Stock
+                  <div id="det-stock-info" class="stock-display">${stockDetForm}</div>
+                </label>
+                <div class="inv-add-cell">
+                  <span class="inv-add-label" aria-hidden="true">&nbsp;</span>
+                  <button type="button" class="btn-inv-add" id="det-agregar" title="${detalleEditando ? "Actualizar producto" : "Agregar producto"}">+</button>
+                </div>
               </div>
             </div>
           </div>
