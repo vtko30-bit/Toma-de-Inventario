@@ -1675,7 +1675,7 @@ function renderInventarios() {
                 </select>
               </label>
               <label class="inv-cab-bodega">Bodega
-                <select id="inv-bodega" ${cabeceraFija ? "disabled" : ""}>
+                <select id="inv-bodega" ${cabeceraFija ? "disabled" : "required"}>
                   <option value="">--</option>
                   ${invBodegasFiltradas.map((b) => `<option value="${b.id}" ${cab.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`).join("")}
                 </select>
@@ -1703,7 +1703,7 @@ function renderInventarios() {
                     ${state.productos.map((p) => opcionProductoNombre(p, productoIdForm)).join("")}
                   </select>
                 </label>
-                <label class="inv-det-cantidad">Cantidad<input type="number" id="det-cantidad" value="${cantidadForm}" /></label>
+                <label class="inv-det-cantidad">Cantidad<input type="number" id="det-cantidad" value="${cantidadForm}" min="0" max="999999" inputmode="numeric" /></label>
               </div>
               <div class="inv-det-row inv-det-row-meta">
                 <label class="inv-det-um">U. de Med.
@@ -1780,6 +1780,7 @@ function renderInventarios() {
         };
         if (!item.nombre) { toast("El nombre es obligatorio", "warn"); return; }
         if (!item.sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
+        if (!item.bodegaId) { toast("Selecciona una bodega", "warn"); return; }
         const i = state.inventarios.findIndex((x) => x.id === item.id);
         if (i >= 0) state.inventarios[i] = { ...state.inventarios[i], ...item };
         else state.inventarios.push(item);
@@ -1808,6 +1809,14 @@ function renderInventarios() {
       if (detProdSel) {
         detProdSel.addEventListener("change", actualizarCamposDetalleProducto);
         if (detProdSel.value) actualizarCamposDetalleProducto();
+      }
+
+      const detCantidad = document.getElementById("det-cantidad");
+      if (detCantidad) {
+        detCantidad.addEventListener("input", () => {
+          const digits = String(detCantidad.value).replace(/\D/g, "").slice(0, 6);
+          if (String(detCantidad.value) !== digits) detCantidad.value = digits;
+        });
       }
 
       const agregarProducto = async () => {

@@ -632,6 +632,16 @@ th {
   align-items: end;
 }
 
+.inv-det-row:not(.inv-det-row-meta) {
+  grid-template-columns: minmax(0, 1fr) 5.75rem;
+}
+
+.inv-det-cantidad input {
+  width: 100%;
+  max-width: 5.75rem;
+  box-sizing: border-box;
+}
+
 .inv-det-row.inv-det-row-meta {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
 }
@@ -663,8 +673,9 @@ th {
   }
 
   .inv-det-row > label.inv-det-cantidad {
-    flex: 1 1 100px;
-    min-width: 90px;
+    flex: 0 0 5.75rem;
+    min-width: 5.75rem;
+    max-width: 5.75rem;
   }
 
   .inv-det-row > label.inv-det-um,
