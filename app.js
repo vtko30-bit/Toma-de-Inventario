@@ -1606,10 +1606,16 @@ function bodegasPorSucursal(sucursalId) {
   return sucursalId ? state.bodegas.filter((b) => b.sucursalId === sucursalId) : [];
 }
 
+const INV_BODEGA_NUEVA = "__nueva__";
+
 function opcionesSelectBodegas(bodegas, selectedId) {
-  return `<option value="">--</option>` + bodegas.map((b) =>
+  const lista = bodegas.map((b) =>
     `<option value="${b.id}" ${selectedId === b.id ? "selected" : ""}>${b.nombre}</option>`
   ).join("");
+  const agregar = bodegas.length
+    ? `<option value="${INV_BODEGA_NUEVA}">+ Agregar bodega...</option>`
+    : "";
+  return `<option value="">--</option>` + lista + agregar;
 }
 
 async function crearBodegaInventario(nombre, sucursalId) {
@@ -1644,28 +1650,34 @@ function setupInvBodegaControls(cabeceraFija) {
   const bloqueCrear = document.getElementById("inv-bodega-crear");
   const inputNombre = document.getElementById("inv-bodega-nombre");
   const btnAgregar = document.getElementById("inv-bodega-agregar");
+  const btnCancelar = document.getElementById("inv-bodega-cancelar");
   if (!select) return;
 
   const mostrarModoCrear = (enfocar) => {
+    const hayBodegas = bodegasPorSucursal(invSucSel?.value || "").length > 0;
     select.classList.add("is-hidden");
     select.disabled = true;
     select.removeAttribute("required");
     bloqueCrear?.classList.add("is-visible");
+    btnCancelar?.classList.toggle("is-hidden", !hayBodegas);
     if (enfocar) inputNombre?.focus();
   };
 
   const mostrarModoSelect = () => {
     select.classList.remove("is-hidden");
     bloqueCrear?.classList.remove("is-visible");
+    btnCancelar?.classList.add("is-hidden");
     if (inputNombre) inputNombre.value = "";
   };
 
   const actualizarUiBodega = (enfocarCrear) => {
     const sucursalId = invSucSel?.value || "";
     const filtradas = bodegasPorSucursal(sucursalId);
-    const prev = select.value;
+    const prev = select.value === INV_BODEGA_NUEVA ? "" : select.value;
     const prevValido = filtradas.some((b) => b.id === prev);
-    select.innerHTML = opcionesSelectBodegas(filtradas, prevValido ? prev : "");
+    const seleccionado = prevValido ? prev : "";
+    select.innerHTML = opcionesSelectBodegas(filtradas, seleccionado);
+    if (seleccionado) select.dataset.lastValue = seleccionado;
 
     if (!sucursalId) {
       mostrarModoSelect();
@@ -1679,6 +1691,7 @@ function setupInvBodegaControls(cabeceraFija) {
       mostrarModoSelect();
       select.disabled = false;
       select.setAttribute("required", "");
+      select.value = seleccionado;
       return;
     }
 
@@ -1695,9 +1708,26 @@ function setupInvBodegaControls(cabeceraFija) {
   };
 
   invSucSel?.addEventListener("change", () => actualizarUiBodega(true));
+  select.addEventListener("change", () => {
+    if (select.value === INV_BODEGA_NUEVA) {
+      select.value = select.dataset.lastValue || "";
+      mostrarModoCrear(true);
+      return;
+    }
+    if (select.value) select.dataset.lastValue = select.value;
+  });
   select.addEventListener("focus", () => {
     const sucursalId = invSucSel?.value || "";
     if (sucursalId && !bodegasPorSucursal(sucursalId).length) mostrarModoCrear(true);
+  });
+  btnCancelar?.addEventListener("click", () => {
+    mostrarModoSelect();
+    const sucursalId = invSucSel?.value || "";
+    const filtradas = bodegasPorSucursal(sucursalId);
+    select.innerHTML = opcionesSelectBodegas(filtradas, select.dataset.lastValue || "");
+    select.value = select.dataset.lastValue || "";
+    select.disabled = false;
+    select.setAttribute("required", "");
   });
   btnAgregar?.addEventListener("click", agregarBodega);
   inputNombre?.addEventListener("keydown", (e) => {
@@ -1788,6 +1818,7 @@ function renderInventarios() {
                   </select>
                   ${!cabeceraFija ? `
                   <div id="inv-bodega-crear" class="inv-bodega-crear${invSinBodegasSucursal ? " is-visible" : ""}">
+                    <button type="button" id="inv-bodega-cancelar" class="btn-inv-bod-cancel is-hidden" title="Volver" aria-label="Volver al listado de bodegas">×</button>
                     <input type="text" id="inv-bodega-nombre" placeholder="Nombre nueva bodega" autocomplete="off" />
                     <button type="button" id="inv-bodega-agregar">Agregar</button>
                   </div>` : ""}

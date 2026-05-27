@@ -374,9 +374,30 @@ th {
 
 .inv-bodega-crear {
   display: none;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
+}
+
+.btn-inv-bod-cancel {
+  width: 34px;
+  height: 38px;
+  padding: 0;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 1.25rem;
+  line-height: 1;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.btn-inv-bod-cancel.is-hidden {
+  display: none;
+}
+
+.btn-inv-bod-cancel:hover {
+  background: #cbd5e1;
+  opacity: 1;
 }
 
 .inv-bodega-crear.is-visible {
