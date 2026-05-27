@@ -33,6 +33,20 @@ function esAdmin() {
   return window.Auth?.isAdmin() === true;
 }
 
+function soloTomaInventario() {
+  return window.Auth?.isSoloInventario() === true;
+}
+
+function etiquetaRol(role) {
+  const map = { admin: "admin", usuario: "usuario", inventario: "solo inventario" };
+  return map[role] || role || "";
+}
+
+function puedeAccederVista(viewId) {
+  if (!soloTomaInventario()) return true;
+  return viewId === "inventarios";
+}
+
 function normalizarEstadoInventario(inv) {
   if (inv.estado && ESTADOS_INVENTARIO.includes(inv.estado)) return inv.estado;
   return (inv.detalles || []).length > 0 ? "cerrado" : "borrador";
@@ -409,6 +423,7 @@ function toggleMobileNav() {
 
 function navigateToView(viewId) {
   if (!viewId) return;
+  if (!puedeAccederVista(viewId)) viewId = "inventarios";
   document.querySelectorAll(".nav-btn").forEach((x) => {
     x.classList.toggle("active", x.dataset.view === viewId);
   });
@@ -2345,8 +2360,8 @@ function setupAuthUI() {
       if (user) {
         screen.style.display = "none";
         shell.style.display = "";
-        document.getElementById("userInfo").innerHTML = `${user.nombre || user.email}<br><small>${user.email}</small><span class="role-badge">${user.role}</span>`;
-        aplicarVisibilidadAdmin();
+        document.getElementById("userInfo").innerHTML = `${user.nombre || user.email}<br><small>${user.email}</small><span class="role-badge">${etiquetaRol(user.role)}</span>`;
+        aplicarPermisosPorRol();
         await window.DataLayer.load(user.tenantId);
       } else {
         shell.style.display = "none";
@@ -2361,11 +2376,18 @@ function setupAuthUI() {
   aplicarModo();
 }
 
-function aplicarVisibilidadAdmin() {
-  const esAdmin = window.Auth?.isAdmin();
+function aplicarPermisosPorRol() {
+  const admin = esAdmin();
+  const soloInv = soloTomaInventario();
   document.querySelectorAll('[data-admin-only="true"]').forEach((el) => {
-    el.style.display = esAdmin ? "" : "none";
+    el.style.display = admin ? "" : "none";
   });
+  document.querySelectorAll('[data-hide-inventario-only="true"]').forEach((el) => {
+    el.style.display = soloInv ? "none" : "";
+  });
+  const exportDrop = document.getElementById("exportDropdown");
+  if (exportDrop) exportDrop.style.display = soloInv ? "none" : "";
+  if (soloInv) navigateToView("inventarios");
 }
 
 function setupUserMenu() {
@@ -2442,7 +2464,7 @@ async function renderUsuariosSupabase(el) {
         <li>Comparte el enlace de la app y el nombre de tu empresa: <strong>${tenantActual}</strong></li>
         <li>La otra persona entra al enlace y presiona <em>Crear cuenta</em></li>
         <li>Se registra con su correo, contraseña y exactamente ese mismo nombre de empresa</li>
-        <li>Una vez registrada, vuelve aquí y cámbiale el rol (por defecto queda como <em>admin</em>)</li>
+        <li>Una vez registrada, vuelve aquí y asígnale el rol: <em>admin</em>, <em>usuario</em> o <em>solo inventario</em> (solo Toma de Inventario)</li>
       </ol>
       <div class="grid">
         <label>URL de la app<input id="inv-url" value="${appUrl}" readonly /></label>
@@ -2473,6 +2495,7 @@ async function renderUsuariosSupabase(el) {
                       : `<select class="rol-usuario" data-id="${u.id}">
                           <option value="admin" ${u.role === "admin" ? "selected" : ""}>admin</option>
                           <option value="usuario" ${u.role === "usuario" ? "selected" : ""}>usuario</option>
+                          <option value="inventario" ${u.role === "inventario" ? "selected" : ""}>solo inventario</option>
                         </select>`}
                   </td>
                 </tr>

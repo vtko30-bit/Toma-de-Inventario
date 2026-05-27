@@ -33,11 +33,17 @@ body {
 
 .btn-nav-menu {
   display: none;
-  background: #1e293b;
-  border: 1px solid #475569;
+  background: #2563eb;
+  border: none;
   padding: 8px 14px;
   font-weight: 600;
   flex-shrink: 0;
+  color: #fff;
+}
+
+.btn-nav-menu:hover {
+  background: #1d4ed8;
+  opacity: 1;
 }
 
 .topbar-actions {

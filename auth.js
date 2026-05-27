@@ -223,6 +223,10 @@ const Auth = {
 
   isAdmin() {
     return this.currentUser?.role === "admin";
+  },
+
+  isSoloInventario() {
+    return this.currentUser?.role === "inventario";
   }
 };
 
