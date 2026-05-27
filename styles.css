@@ -353,36 +353,53 @@ th {
   align-items: end;
 }
 
+.inv-cabecera-row > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.inv-cab-bodega .inv-bodega-field {
+  min-width: 0;
+}
+
+.inv-bodega-field select {
+  width: 100%;
+}
+
+.inv-bodega-field select.is-hidden {
+  display: none;
+}
+
+.inv-bodega-crear {
+  display: none;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.inv-bodega-crear.is-visible {
+  display: grid;
+}
+
+.inv-bodega-crear input {
+  min-width: 0;
+  width: 100%;
+}
+
+.inv-bodega-crear button {
+  flex-shrink: 0;
+  background: #16a34a;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 #view-inventarios .inv-cab-fecha input[type="date"] {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-}
-
-.inv-bodega-nueva {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-  align-items: center;
-}
-
-.inv-bodega-nueva input {
-  flex: 1 1 120px;
-  min-width: 0;
-}
-
-.inv-bodega-nueva button {
-  flex: 0 0 auto;
-  background: #16a34a;
-  padding: 8px 12px;
-  font-size: 0.85rem;
-}
-
-.inv-bodega-toggle {
-  margin-top: 4px;
-  padding: 0;
-  font-size: 0.85rem;
 }
 
 @media (min-width: 901px) {

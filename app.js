@@ -1641,39 +1641,48 @@ function setupInvBodegaControls(cabeceraFija) {
   if (cabeceraFija) return;
   const invSucSel = document.getElementById("inv-sucursal");
   const select = document.getElementById("inv-bodega");
-  const bloqueNueva = document.getElementById("inv-bodega-nueva");
-  const toggle = document.getElementById("inv-bodega-toggle");
+  const bloqueCrear = document.getElementById("inv-bodega-crear");
   const inputNombre = document.getElementById("inv-bodega-nombre");
   const btnAgregar = document.getElementById("inv-bodega-agregar");
   if (!select) return;
 
-  const actualizarUiBodega = () => {
+  const mostrarModoCrear = (enfocar) => {
+    select.classList.add("is-hidden");
+    select.disabled = true;
+    select.removeAttribute("required");
+    bloqueCrear?.classList.add("is-visible");
+    if (enfocar) inputNombre?.focus();
+  };
+
+  const mostrarModoSelect = () => {
+    select.classList.remove("is-hidden");
+    bloqueCrear?.classList.remove("is-visible");
+    if (inputNombre) inputNombre.value = "";
+  };
+
+  const actualizarUiBodega = (enfocarCrear) => {
     const sucursalId = invSucSel?.value || "";
     const filtradas = bodegasPorSucursal(sucursalId);
     const prev = select.value;
     const prevValido = filtradas.some((b) => b.id === prev);
     select.innerHTML = opcionesSelectBodegas(filtradas, prevValido ? prev : "");
-    if (!sucursalId || !filtradas.length) {
+
+    if (!sucursalId) {
+      mostrarModoSelect();
       select.value = "";
       select.disabled = true;
       select.removeAttribute("required");
-    } else {
+      return;
+    }
+
+    if (filtradas.length) {
+      mostrarModoSelect();
       select.disabled = false;
       select.setAttribute("required", "");
-    }
-    if (toggle) toggle.style.display = sucursalId && filtradas.length ? "" : "none";
-    if (!bloqueNueva) return;
-    if (!sucursalId) {
-      bloqueNueva.style.display = "none";
-      bloqueNueva.dataset.expanded = "0";
       return;
     }
-    if (!filtradas.length) {
-      bloqueNueva.style.display = "";
-      bloqueNueva.dataset.expanded = "1";
-      return;
-    }
-    bloqueNueva.style.display = bloqueNueva.dataset.expanded === "1" ? "" : "none";
+
+    mostrarModoCrear(enfocarCrear);
   };
 
   const agregarBodega = async () => {
@@ -1681,21 +1690,14 @@ function setupInvBodegaControls(cabeceraFija) {
     const item = await crearBodegaInventario(inputNombre?.value || "", sucursalId);
     if (!item) return;
     if (inputNombre) inputNombre.value = "";
-    if (bloqueNueva) bloqueNueva.dataset.expanded = "0";
-    actualizarUiBodega();
+    actualizarUiBodega(false);
     select.value = item.id;
   };
 
-  invSucSel?.addEventListener("change", () => {
-    if (bloqueNueva) bloqueNueva.dataset.expanded = "0";
-    actualizarUiBodega();
-  });
-  toggle?.addEventListener("click", () => {
-    if (!bloqueNueva) return;
-    const abrir = bloqueNueva.style.display === "none";
-    bloqueNueva.style.display = abrir ? "" : "none";
-    bloqueNueva.dataset.expanded = abrir ? "1" : "0";
-    if (abrir) inputNombre?.focus();
+  invSucSel?.addEventListener("change", () => actualizarUiBodega(true));
+  select.addEventListener("focus", () => {
+    const sucursalId = invSucSel?.value || "";
+    if (sucursalId && !bodegasPorSucursal(sucursalId).length) mostrarModoCrear(true);
   });
   btnAgregar?.addEventListener("click", agregarBodega);
   inputNombre?.addEventListener("keydown", (e) => {
@@ -1704,7 +1706,8 @@ function setupInvBodegaControls(cabeceraFija) {
       agregarBodega();
     }
   });
-  actualizarUiBodega();
+  const sucursalInicial = invSucSel?.value || "";
+  actualizarUiBodega(sucursalInicial && !bodegasPorSucursal(sucursalInicial).length);
 }
 
 function filtrarInventariosLista() {
@@ -1779,16 +1782,16 @@ function renderInventarios() {
                 </select>
               </label>
               <label class="inv-cab-bodega">Bodega
-                <select id="inv-bodega" ${cabeceraFija ? "disabled" : (invBodegasFiltradas.length ? "required" : "disabled")}>
-                  ${opcionesSelectBodegas(invBodegasFiltradas, cab.bodegaId)}
-                </select>
-                ${!cabeceraFija ? `
-                <div id="inv-bodega-nueva" class="inv-bodega-nueva"${invSinBodegasSucursal ? "" : ' style="display:none"'}>
-                  <input type="text" id="inv-bodega-nombre" placeholder="Nombre de la bodega" autocomplete="off" />
-                  <button type="button" id="inv-bodega-agregar">Agregar</button>
+                <div class="inv-bodega-field">
+                  <select id="inv-bodega" class="${invSinBodegasSucursal && !cabeceraFija ? "is-hidden" : ""}" ${cabeceraFija ? "disabled" : (invBodegasFiltradas.length ? "required" : "disabled")}>
+                    ${opcionesSelectBodegas(invBodegasFiltradas, cab.bodegaId)}
+                  </select>
+                  ${!cabeceraFija ? `
+                  <div id="inv-bodega-crear" class="inv-bodega-crear${invSinBodegasSucursal ? " is-visible" : ""}">
+                    <input type="text" id="inv-bodega-nombre" placeholder="Nombre nueva bodega" autocomplete="off" />
+                    <button type="button" id="inv-bodega-agregar">Agregar</button>
+                  </div>` : ""}
                 </div>
-                ${invBodegasFiltradas.length ? '<button type="button" id="inv-bodega-toggle" class="btn-link inv-bodega-toggle">+ Nueva bodega</button>' : ""}
-                ` : ""}
               </label>
             </div>
           </div>
