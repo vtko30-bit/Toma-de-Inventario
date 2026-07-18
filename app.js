@@ -780,16 +780,46 @@ function renderDashboard() {
 }
 
 function abrirFormularioProducto(productoId = null) {
-  if (!puedeEditarCatalogos()) {
-    toast("Solo administradores pueden crear o editar productos", "warn");
-    return;
+  try {
+    if (!puedeEditarCatalogos()) {
+      toast("Solo administradores pueden crear o editar productos. Tu rol: " + (etiquetaRol(window.Auth?.currentUser?.role) || "desconocido"), "warn", 5000);
+      return;
+    }
+    editingIds.producto = productoId || null;
+    showProductoForm = true;
+    renderProductos();
+    const formCard = document.getElementById("prod-form-card");
+    formCard?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => {
+      const nombre = document.getElementById("prod-nombre");
+      nombre?.focus();
+      if (!productoId) nombre?.select?.();
+    }, 50);
+  } catch (e) {
+    console.error("abrirFormularioProducto:", e);
+    toast("Error al abrir formulario: " + (e.message || e), "error", 5000);
   }
-  editingIds.producto = productoId;
-  showProductoForm = true;
-  renderProductos();
-  const formCard = document.getElementById("prod-form-card");
-  formCard?.scrollIntoView({ behavior: "smooth", block: "start" });
-  setTimeout(() => document.getElementById("prod-nombre")?.focus(), 50);
+}
+window.abrirFormularioProducto = abrirFormularioProducto;
+
+function setupProductosUI() {
+  const root = document.getElementById("view-productos");
+  if (!root || root.dataset.uiReady === "1") return;
+  root.dataset.uiReady = "1";
+  root.addEventListener("click", (e) => {
+    const btn = e.target.closest("#btn-nuevo-producto, .btn-nuevo-producto");
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      abrirFormularioProducto(null);
+      return;
+    }
+    const row = e.target.closest("tr.row-producto");
+    if (row?.dataset?.id) {
+      e.preventDefault();
+      abrirFormularioProducto(row.dataset.id);
+    }
+  });
 }
 
 function renderProductos() {
@@ -803,13 +833,15 @@ function renderProductos() {
   const dis = soloLectura ? "disabled" : "";
   const esProcesado = data?.tipo === "Procesado";
   const listRecetas = esProcesado ? ' list="prod-nombre-recetas"' : "";
-  const mostrandoForm = showProductoForm || !!editingIds.producto;
+  const editando = !!editingIds.producto;
 
   el.innerHTML = `
     ${soloLectura ? `<div class="read-only-banner">Modo solo lectura: tu rol es <strong>${etiquetaRol(window.Auth?.currentUser?.role)}</strong>. Solo administradores pueden modificar productos.</div>` : ""}
-    ${mostrandoForm ? `
     <div class="card" id="prod-form-card">
-      <h2>${editingIds.producto ? "Editar producto" : "Nuevo producto"}</h2>
+      <div class="prod-lista-head">
+        <h2 style="margin:0;">${editando ? "Editar producto" : "Nuevo producto"}</h2>
+        ${editando ? `<button type="button" id="btn-nuevo-producto" class="btn-nuevo-producto">Nuevo producto</button>` : ""}
+      </div>
       <input type="hidden" id="prod-id" value="${data?.id || uid("PROD")}" />
       <div class="grid prod-form-grid">
         <div class="prod-nombre-cell">
@@ -844,18 +876,17 @@ function renderProductos() {
         </label>
       </div>
       <div class="actions prod-form-actions">
-        <button id="prod-guardar" ${dis}>Guardar</button>
-        ${editingIds.producto ? `<button id="prod-eliminar" ${dis}>Eliminar</button>` : ""}
-        <button type="button" id="prod-cancelar" class="btn-link">Cancelar</button>
+        <button type="button" id="prod-guardar" ${dis}>Guardar</button>
+        ${editando ? `<button type="button" id="prod-eliminar" ${dis}>Eliminar</button>` : ""}
+        ${editando ? `<button type="button" id="prod-cancelar" class="btn-link">Cancelar</button>` : ""}
       </div>
-    </div>` : ""}
+    </div>
     <div class="card">
       <div class="prod-lista-head">
         <h3 style="margin:0;">Productos</h3>
-        ${!mostrandoForm ? `<button type="button" id="btn-nuevo-producto">Nuevo producto</button>` : ""}
       </div>
       ${state.productos.length === 0
-        ? '<p class="empty-state">Aún no hay productos. Pulsa <strong>Nuevo producto</strong> para crear uno.</p>'
+        ? '<p class="empty-state">Aún no hay productos. Completa el formulario de arriba y pulsa <strong>Guardar</strong>.</p>'
         : `<div class="table-scroll"><table class="prod-lista-table">
         <thead><tr><th>Id</th><th>Nombre</th><th>Precio</th><th>Tipo</th><th>Formato</th><th>Familia</th><th>Categoría</th><th>Stock</th></tr></thead>
         <tbody>
@@ -864,18 +895,6 @@ function renderProductos() {
       </table></div>`}
     </div>
   `;
-
-  document.getElementById("btn-nuevo-producto")?.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    abrirFormularioProducto(null);
-  });
-
-  document.querySelectorAll(".row-producto").forEach((r) => {
-    r.addEventListener("click", () => abrirFormularioProducto(r.dataset.id));
-  });
-
-  if (!mostrandoForm) return;
 
   document.getElementById("prod-familia").value = data?.familiaId || "";
   document.getElementById("prod-categoria").value = data?.categoriaId || "";
@@ -933,7 +952,7 @@ function renderProductos() {
 
   document.getElementById("prod-cancelar")?.addEventListener("click", () => {
     editingIds.producto = null;
-    showProductoForm = false;
+    showProductoForm = true;
     renderProductos();
   });
 
@@ -972,7 +991,7 @@ function renderProductos() {
     if (editaba) state.productos[i] = item;
     else state.productos.push(item);
     editingIds.producto = null;
-    showProductoForm = false;
+    showProductoForm = true;
     toast(editaba ? "Producto actualizado" : "Producto creado", "success");
     render();
   });
@@ -983,7 +1002,7 @@ function renderProductos() {
     state.productos = state.productos.filter((x) => x.id !== id);
     limpiarRecetasPorProducto(id);
     editingIds.producto = null;
-    showProductoForm = false;
+    showProductoForm = true;
     toast("Producto eliminado", "success");
     render();
   });
@@ -2654,13 +2673,15 @@ function setupNuevoInventarioTop() {
 }
 
 function setupServiceWorker() {
-  if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker
-        .register("./service-worker.js")
-        .catch((err) => console.warn("Service worker registro fallido:", err));
-    });
-  }
+  if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
+  window.addEventListener("load", async () => {
+    try {
+      const reg = await navigator.serviceWorker.register("./service-worker.js");
+      reg.update?.();
+    } catch (err) {
+      console.warn("Service worker registro fallido:", err);
+    }
+  });
 }
 
 function setupAuthUI() {
@@ -2930,6 +2951,7 @@ async function boot() {
   setupExport();
   setupNuevoInventarioTop();
   setupUserMenu();
+  setupProductosUI();
   setupServiceWorker();
 
   window.DataLayer.setOnChange((nuevoState) => {

@@ -763,13 +763,18 @@ th {
   flex-wrap: wrap;
 }
 
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .prod-lista-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   background: #fff;
   border-radius: 10px;
-  overflow: hidden;
 }
 
 .prod-lista-table thead th {
@@ -783,6 +788,14 @@ th {
   text-align: left;
   border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
+}
+
+.prod-lista-table thead th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.prod-lista-table thead th:last-child {
+  border-top-right-radius: 10px;
 }
 
 .prod-lista-table tbody td {

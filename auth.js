@@ -222,11 +222,11 @@ const Auth = {
   },
 
   isAdmin() {
-    return this.currentUser?.role === "admin";
+    return String(this.currentUser?.role || "").toLowerCase().trim() === "admin";
   },
 
   isSoloInventario() {
-    return this.currentUser?.role === "inventario";
+    return String(this.currentUser?.role || "").toLowerCase().trim() === "inventario";
   }
 };
 
