@@ -13,6 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
   <link rel="apple-touch-icon" href="icons/icon.svg" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body>
   <div id="auth-screen" class="auth-screen">
@@ -41,16 +42,16 @@
       <div class="topbar-toolbar">
         <button type="button" id="btnNavMenu" class="btn-nav-menu" aria-expanded="false" aria-controls="sidebar">Menú</button>
         <div class="topbar-actions">
-        <button id="btnNuevoInventarioTop" style="display:none;">Nuevo Inventario</button>
+        <button id="btnNuevoInventarioTop" class="btn-topbar" style="display:none;">Nuevo Inventario</button>
         <div class="dropdown" id="exportDropdown">
-          <button id="btnExport">Exportar</button>
+          <button id="btnExport" class="btn-topbar">Exportar</button>
           <div class="dropdown-menu" id="exportMenu">
             <button id="btnExportCsv">CSV</button>
             <button id="btnExportXlsx">Excel</button>
           </div>
         </div>
         <div class="dropdown" id="userDropdown">
-          <button id="btnUser">Usuario</button>
+          <button id="btnUser" class="btn-topbar">Usuario</button>
           <div class="dropdown-menu" id="userMenu">
             <span id="userInfo" class="user-info"></span>
             <button id="btnLogout">Cerrar sesión</button>
@@ -63,16 +64,16 @@
 
     <main class="layout">
       <nav id="sidebar" class="sidebar">
-        <button class="nav-btn active" data-view="dashboard" data-hide-inventario-only="true">Dashboard</button>
-        <button class="nav-btn" data-view="productos" data-hide-inventario-only="true">Productos</button>
-        <button class="nav-btn" data-view="recetas" data-admin-only="true">Receta</button>
-        <button class="nav-btn" data-view="familias" data-admin-only="true">Familias</button>
-        <button class="nav-btn" data-view="categorias" data-admin-only="true">Categorías</button>
-        <button class="nav-btn" data-view="sucursales" data-admin-only="true">Sucursales</button>
-        <button class="nav-btn" data-view="bodegas" data-admin-only="true">Bodegas</button>
-        <button class="nav-btn" data-view="movimientos" data-hide-inventario-only="true">Movimientos de inventario</button>
         <button class="nav-btn" data-view="inventarios">Toma de Inventario</button>
+        <button class="nav-btn" data-view="productos" data-hide-inventario-only="true">Productos</button>
+        <button class="nav-btn" data-view="familias" data-admin-only="true">Familia</button>
+        <button class="nav-btn" data-view="categorias" data-admin-only="true">Categoria</button>
+        <button class="nav-btn" data-view="sucursales" data-admin-only="true">Sucursal</button>
+        <button class="nav-btn" data-view="bodegas" data-admin-only="true">Bodega</button>
+        <button class="nav-btn" data-view="movimientos" data-hide-inventario-only="true">Movimientos de inventario</button>
+        <button class="nav-btn" data-view="recetas" data-admin-only="true">Receta</button>
         <button class="nav-btn" data-view="usuarios" data-admin-only="true">Usuarios</button>
+        <button class="nav-btn active" data-view="dashboard" data-hide-inventario-only="true">Dashboard</button>
       </nav>
 
       <section class="content">

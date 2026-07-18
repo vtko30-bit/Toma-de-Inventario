@@ -21,11 +21,16 @@ let editingIds = {
 let showDetalleInventarioForm = false;
 let showCabeceraInventarioForm = false;
 let showVerInventario = false;
+let showProductoForm = false;
 let _movLineasDraft = [];
 let _movCabeceraDraft = null;
 let _invDetalleDraft = { productoId: "", cantidad: 0 };
 let _invCabeceraDraft = null;
-let _invListaFilter = { fecha: "", nombre: "", estado: "activos" };
+let _invListaFilter = { fecha: "", bodegaId: "", estado: "activos" };
+let _invProductoBusqueda = "";
+let _invTomaDraft = {};
+let _usuariosTenantNombres = [];
+let _usuariosTenantPromise = null;
 
 const ESTADOS_INVENTARIO = ["borrador", "cerrado", "anulado"];
 
@@ -83,10 +88,46 @@ function _formularioInventarioActivo() {
 }
 
 function capturarInvDetalleDesdeDom() {
+  const nombre = document.getElementById("det-prod-nombre")?.value?.trim() || "";
+  const productoId =
+    document.getElementById("det-prod")?.value ||
+    resolverProductoIdPorNombre(nombre) ||
+    "";
   return {
-    productoId: document.getElementById("det-prod")?.value || "",
+    productoId,
     cantidad: Number(document.getElementById("det-cantidad")?.value || 0)
   };
+}
+
+function resolverProductoIdPorNombre(nombre) {
+  const q = String(nombre || "").trim().toLowerCase();
+  if (!q) return "";
+  const exacto = state.productos.find((p) => String(p.nombre || "").trim().toLowerCase() === q);
+  if (exacto) return exacto.id;
+  const parciales = state.productos.filter((p) => String(p.nombre || "").toLowerCase().includes(q));
+  return parciales.length === 1 ? parciales[0].id : "";
+}
+
+function htmlDatalistProductosInv(productos) {
+  return (productos || [])
+    .map((p) => `<option value="${escapeAttr(p.nombre || "")}"></option>`)
+    .join("");
+}
+
+function limpiarFormularioProductoInv() {
+  const nombre = document.getElementById("det-prod-nombre");
+  const idHidden = document.getElementById("det-prod");
+  const cantidad = document.getElementById("det-cantidad");
+  const um = document.getElementById("det-um");
+  const stock = document.getElementById("det-stock-info");
+  if (nombre) nombre.value = "";
+  if (idHidden) idHidden.value = "";
+  if (cantidad) cantidad.value = "0";
+  if (um) um.textContent = "—";
+  if (stock) stock.textContent = "—";
+  _invDetalleDraft = { productoId: "", cantidad: 0 };
+  _invProductoBusqueda = "";
+  editingIds.detalleInventario = null;
 }
 
 function capturarInvCabeceraDesdeDom() {
@@ -100,14 +141,87 @@ function capturarInvCabeceraDesdeDom() {
 }
 
 function preservarBorradoresInventario() {
-  if (document.getElementById("det-prod")) {
-    const det = capturarInvDetalleDesdeDom();
-    if (det.productoId || det.cantidad) _invDetalleDraft = det;
+  if (document.getElementById("det-prod-nombre") || document.querySelector(".inv-toma-row")) {
+    const nombre = document.getElementById("det-prod-nombre")?.value || "";
+    if (nombre) _invProductoBusqueda = nombre;
+    capturarInvTomaDraftDesdeDom();
   }
   const cabeceraFija = showDetalleInventarioForm && editingIds.inventario;
   if (showCabeceraInventarioForm && !cabeceraFija && document.getElementById("inv-nombre")) {
     _invCabeceraDraft = capturarInvCabeceraDesdeDom();
   }
+}
+
+function capturarInvTomaDraftDesdeDom() {
+  document.querySelectorAll(".inv-toma-row").forEach((row) => {
+    const productoId = row.dataset.productoId;
+    if (!productoId) return;
+    const checked = !!row.querySelector(".inv-toma-check")?.checked;
+    const cantidad = Number(row.querySelector(".inv-toma-cant")?.value || 0);
+    _invTomaDraft[productoId] = { checked, cantidad };
+  });
+}
+
+function busquedaOcultaFila(nombre, busqueda) {
+  const q = String(busqueda || "").trim().toLowerCase();
+  if (!q) return false;
+  return !String(nombre || "").toLowerCase().includes(q);
+}
+
+function filtrarFilasTomaPorBusqueda(texto) {
+  const q = String(texto || "").trim().toLowerCase();
+  _invProductoBusqueda = texto || "";
+  let visibles = 0;
+  document.querySelectorAll(".inv-toma-row").forEach((row) => {
+    const nombre = (row.dataset.prodNombre || "").toLowerCase();
+    const show = !q || nombre.includes(q);
+    row.style.display = show ? "" : "none";
+    if (show) visibles += 1;
+  });
+  const count = document.getElementById("inv-toma-count");
+  const total = document.querySelectorAll(".inv-toma-row").length;
+  if (count) count.textContent = q ? `${visibles} de ${total} productos` : `${total} productos`;
+}
+
+function filasTomaInventario(bodegaId, detalles) {
+  const porProducto = {};
+  (detalles || []).forEach((d) => {
+    porProducto[d.productoId] = d;
+  });
+  return productosOrdenadosPorNombre(state.productos).map((p) => {
+    const det = porProducto[p.id];
+    const draft = _invTomaDraft[p.id];
+    const stock = stockBaseProductoEnBodega(p.id, bodegaId);
+    return {
+      producto: p,
+      stock,
+      cantidad: draft?.cantidad ?? det?.cantidad ?? 0,
+      checked: draft?.checked ?? (det ? Number(det.cantidad) > 0 : false),
+      detalleId: det?.id || null
+    };
+  });
+}
+
+function aplicarAjusteStockBodega({ productoId, bodegaId, sucursalId, sucursal, fecha, stockActual, cantidadNueva, nombreInv }) {
+  const diff = Number(cantidadNueva) - Number(stockActual);
+  if (!diff) return null;
+  const prod = byId(state.productos, productoId);
+  const mov = {
+    id: uid(diff > 0 ? "AJ-IN" : "AJ-EG"),
+    fecha: fecha || new Date().toISOString().slice(0, 10),
+    nombre: `Ajuste inventario${nombreInv ? `: ${nombreInv}` : ""}`,
+    tipo: diff > 0 ? "Ingreso" : "Egreso",
+    sucursalId: sucursalId || "",
+    sucursal: sucursal || "",
+    bodegaId: bodegaId || "",
+    productoId,
+    cantidad: Math.abs(diff),
+    cantidadBase: Math.abs(diff),
+    auto: true,
+    ajusteInventario: true
+  };
+  state.movimientos.push(mov);
+  return mov;
 }
 
 function fusionarInventarioEnEdicion(invLocal) {
@@ -227,14 +341,52 @@ function uid(prefix) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 9999)}`;
 }
 
-function byId(arr, id) {
-  return arr.find((x) => x.id === id);
+function monedaPorLocale(locale) {
+  const lang = String(locale || "").toLowerCase();
+  if (lang.startsWith("es-cl") || lang === "es") return "CLP";
+  if (lang.startsWith("es-mx")) return "MXN";
+  if (lang.startsWith("es-ar")) return "ARS";
+  if (lang.startsWith("es-co")) return "COP";
+  if (lang.startsWith("es-pe")) return "PEN";
+  if (lang.startsWith("es-uy")) return "UYU";
+  if (lang.startsWith("en-us")) return "USD";
+  if (lang.startsWith("en-gb")) return "GBP";
+  if (lang.startsWith("pt-br")) return "BRL";
+  if (lang.startsWith("eu")) return "EUR";
+  return "CLP";
+}
+
+function formatMoneda(valor) {
+  const n = Number(valor) || 0;
+  const locale = navigator.language || "es-CL";
+  const currency = monedaPorLocale(locale);
+  const tieneDecimales = Math.abs(n % 1) >= 0.005;
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: tieneDecimales ? 2 : 0,
+      maximumFractionDigits: tieneDecimales ? 2 : 0
+    }).format(n);
+  } catch {
+    return new Intl.NumberFormat("es-CL", {
+      style: "currency",
+      currency: "CLP",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(n);
+  }
 }
 
 function stockBaseProducto(productoId) {
+  return stockBaseProductoEnBodega(productoId, null);
+}
+
+function stockBaseProductoEnBodega(productoId, bodegaId) {
   let total = 0;
   for (const mov of state.movimientos) {
     if (mov.productoId !== productoId) continue;
+    if (bodegaId && mov.bodegaId !== bodegaId) continue;
     const base = Number(mov.cantidadBase ?? mov.cantidad) || 0;
     if (mov.tipo === "Ingreso") total += base;
     if (mov.tipo === "Egreso") total -= base;
@@ -261,6 +413,20 @@ function opcionProductoConStock(p, selectedId) {
 
 function opcionProductoNombre(p, selectedId) {
   return `<option value="${p.id}" ${selectedId === p.id ? "selected" : ""}>${p.nombre}</option>`;
+}
+
+function productosOrdenadosPorNombre(lista) {
+  return [...(lista || [])].sort((a, b) =>
+    String(a.nombre || "").localeCompare(String(b.nombre || ""), "es", { sensitivity: "base" })
+  );
+}
+
+function detallesInventarioOrdenados(detalles) {
+  return [...(detalles || [])].sort((a, b) => {
+    const na = byId(state.productos, a.productoId)?.nombre || a.productoId || "";
+    const nb = byId(state.productos, b.productoId)?.nombre || b.productoId || "";
+    return String(na).localeCompare(String(nb), "es", { sensitivity: "base" });
+  });
 }
 
 const TIPOS_EMPAQUE = ["Unidad", "Caja", "Saco", "Tarro", "Bolsa", "Botella", "Pack", "Otro"];
@@ -482,14 +648,62 @@ function renderDashboard() {
 
   el.innerHTML = `
     <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-label">Productos</div><div class="kpi-value">${totalProductos}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Stock bajo (≤5)</div><div class="kpi-value" style="color:${stockBajo > 0 ? "#b91c1c" : "#16a34a"}">${stockBajo}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Valor estimado</div><div class="kpi-value">$${valorTotal.toFixed(2)}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Movimientos</div><div class="kpi-value">${totalMovimientos}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Ingresos (cant.)</div><div class="kpi-value" style="color:#16a34a">${ingresos}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Egresos (cant.)</div><div class="kpi-value" style="color:#b91c1c">${egresos}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Tomas de inventario</div><div class="kpi-value">${totalInventarios}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Bodegas</div><div class="kpi-value">${totalBodegas}</div></div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon-productos" aria-hidden="true"><i class="fa-solid fa-box"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Productos</div>
+          <div class="kpi-value">${totalProductos}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon-alerta" aria-hidden="true"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Stock bajo (≤5)</div>
+          <div class="kpi-value" style="color:${stockBajo > 0 ? "#b91c1c" : "#16a34a"}">${stockBajo}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon-valor" aria-hidden="true"><i class="fa-solid fa-coins"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Valor estimado</div>
+          <div class="kpi-value">${formatMoneda(valorTotal)}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon-movimientos" aria-hidden="true"><i class="fa-solid fa-arrows-rotate"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Movimientos</div>
+          <div class="kpi-value">${totalMovimientos}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon-ingreso" aria-hidden="true"><i class="fa-solid fa-arrow-trend-up"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Ingresos (cant.)</div>
+          <div class="kpi-value kpi-value-ingreso">${ingresos}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon-egreso" aria-hidden="true"><i class="fa-solid fa-arrow-trend-down"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Egresos (cant.)</div>
+          <div class="kpi-value kpi-value-egreso">${egresos}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon-inventario" aria-hidden="true"><i class="fa-solid fa-clipboard-list"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Tomas de inventario</div>
+          <div class="kpi-value">${totalInventarios}</div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon-bodega" aria-hidden="true"><i class="fa-solid fa-warehouse"></i></div>
+        <div class="kpi-body">
+          <div class="kpi-label">Bodegas</div>
+          <div class="kpi-value">${totalBodegas}</div>
+        </div>
+      </div>
     </div>
 
     <div class="chart-grid">
@@ -565,26 +779,46 @@ function renderDashboard() {
   }
 }
 
+function abrirFormularioProducto(productoId = null) {
+  if (!puedeEditarCatalogos()) {
+    toast("Solo administradores pueden crear o editar productos", "warn");
+    return;
+  }
+  editingIds.producto = productoId;
+  showProductoForm = true;
+  renderProductos();
+  const formCard = document.getElementById("prod-form-card");
+  formCard?.scrollIntoView({ behavior: "smooth", block: "start" });
+  setTimeout(() => document.getElementById("prod-nombre")?.focus(), 50);
+}
+
 function renderProductos() {
   const el = document.getElementById("view-productos");
-  const familiasOpts = state.familias.map((f) => `<option value="${f.id}">${f.nombre}</option>`).join("");
-  const categoriasOpts = state.categorias.map((c) => `<option value="${c.id}">${c.nombre}</option>`).join("");
+  if (!el) return;
+  if (!Array.isArray(state.productos)) state.productos = [];
+  const familiasOpts = (state.familias || []).map((f) => `<option value="${f.id}">${f.nombre}</option>`).join("");
+  const categoriasOpts = (state.categorias || []).map((c) => `<option value="${c.id}">${c.nombre}</option>`).join("");
   const data = editingIds.producto ? byId(state.productos, editingIds.producto) : {};
   const soloLectura = !puedeEditarCatalogos();
   const dis = soloLectura ? "disabled" : "";
   const esProcesado = data?.tipo === "Procesado";
   const listRecetas = esProcesado ? ' list="prod-nombre-recetas"' : "";
+  const mostrandoForm = showProductoForm || !!editingIds.producto;
 
   el.innerHTML = `
-    ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>. Solo administradores pueden modificar productos.</div>' : ""}
-    <div class="card">
-      <h2>Producto</h2>
+    ${soloLectura ? `<div class="read-only-banner">Modo solo lectura: tu rol es <strong>${etiquetaRol(window.Auth?.currentUser?.role)}</strong>. Solo administradores pueden modificar productos.</div>` : ""}
+    ${mostrandoForm ? `
+    <div class="card" id="prod-form-card">
+      <h2>${editingIds.producto ? "Editar producto" : "Nuevo producto"}</h2>
       <input type="hidden" id="prod-id" value="${data?.id || uid("PROD")}" />
       <div class="grid prod-form-grid">
-        <label class="prod-checkbox-field">Procesado
-          <input type="checkbox" id="prod-procesado" ${data?.tipo === "Procesado" ? "checked" : ""} ${dis} />
-        </label>
-        <label>Nombre<input id="prod-nombre" value="${data?.nombre || ""}"${listRecetas} ${dis} placeholder="${esProcesado ? "Nombre de receta" : ""}" /></label>
+        <div class="prod-nombre-cell">
+          <label>Nombre<input id="prod-nombre" value="${data?.nombre || ""}"${listRecetas} ${dis} placeholder="${esProcesado ? "Nombre de receta" : ""}" /></label>
+          <label class="prod-checkbox-field">
+            <input type="checkbox" id="prod-procesado" ${data?.tipo === "Procesado" ? "checked" : ""} ${dis} />
+            Procesado
+          </label>
+        </div>
         <label>Familia
           <select id="prod-familia" ${dis}><option value="">--</option>${familiasOpts}</select>
         </label>
@@ -609,22 +843,39 @@ function renderProductos() {
           <input type="number" id="prod-empaque-cant" min="1" step="any" value="${data?.cantidadPorEmpaque ?? (data?.empaque && data.empaque !== "Unidad" ? 1 : 1)}" ${dis} />
         </label>
       </div>
-      <div class="actions">
+      <div class="actions prod-form-actions">
         <button id="prod-guardar" ${dis}>Guardar</button>
-        <button id="prod-editar" ${dis}>Editar</button>
-        <button id="prod-eliminar" ${dis}>Eliminar</button>
+        ${editingIds.producto ? `<button id="prod-eliminar" ${dis}>Eliminar</button>` : ""}
+        <button type="button" id="prod-cancelar" class="btn-link">Cancelar</button>
       </div>
-    </div>
+    </div>` : ""}
     <div class="card">
-      <h3>Lista de productos</h3>
-      <table>
+      <div class="prod-lista-head">
+        <h3 style="margin:0;">Productos</h3>
+        ${!mostrandoForm ? `<button type="button" id="btn-nuevo-producto">Nuevo producto</button>` : ""}
+      </div>
+      ${state.productos.length === 0
+        ? '<p class="empty-state">Aún no hay productos. Pulsa <strong>Nuevo producto</strong> para crear uno.</p>'
+        : `<div class="table-scroll"><table class="prod-lista-table">
         <thead><tr><th>Id</th><th>Nombre</th><th>Precio</th><th>Tipo</th><th>Formato</th><th>Familia</th><th>Categoría</th><th>Stock</th></tr></thead>
         <tbody>
-          ${state.productos.map((p) => `<tr data-id="${p.id}" class="row-producto"><td>${p.id}</td><td>${p.nombre}</td><td>${p.precio}</td><td>${p.tipo}</td><td>${etiquetaEmpaque(p.empaque || "Unidad", cantidadPorEmpaqueProducto(p))}</td><td>${byId(state.familias, p.familiaId)?.nombre || ""}</td><td>${byId(state.categorias, p.categoriaId)?.nombre || ""}</td><td>${calcularStockVisible(p)}</td></tr>`).join("")}
+          ${state.productos.map((p) => `<tr data-id="${p.id}" class="row-producto" style="cursor:pointer;"><td>${p.id}</td><td>${p.nombre}</td><td>${p.precio}</td><td>${p.tipo}</td><td>${etiquetaEmpaque(p.empaque || "Unidad", cantidadPorEmpaqueProducto(p))}</td><td>${byId(state.familias, p.familiaId)?.nombre || ""}</td><td>${byId(state.categorias, p.categoriaId)?.nombre || ""}</td><td>${calcularStockVisible(p)}</td></tr>`).join("")}
         </tbody>
-      </table>
+      </table></div>`}
     </div>
   `;
+
+  document.getElementById("btn-nuevo-producto")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    abrirFormularioProducto(null);
+  });
+
+  document.querySelectorAll(".row-producto").forEach((r) => {
+    r.addEventListener("click", () => abrirFormularioProducto(r.dataset.id));
+  });
+
+  if (!mostrandoForm) return;
 
   document.getElementById("prod-familia").value = data?.familiaId || "";
   document.getElementById("prod-categoria").value = data?.categoriaId || "";
@@ -680,11 +931,10 @@ function renderProductos() {
   prodNombre?.addEventListener("blur", validarProdNombreAlSalir);
   prodNombre?.addEventListener("input", () => marcarNombreProductoInvalido(false));
 
-  document.querySelectorAll(".row-producto").forEach((r) => {
-    r.addEventListener("click", () => {
-      editingIds.producto = r.dataset.id;
-      renderProductos();
-    });
+  document.getElementById("prod-cancelar")?.addEventListener("click", () => {
+    editingIds.producto = null;
+    showProductoForm = false;
+    renderProductos();
   });
 
   document.getElementById("prod-guardar").addEventListener("click", () => {
@@ -722,22 +972,18 @@ function renderProductos() {
     if (editaba) state.productos[i] = item;
     else state.productos.push(item);
     editingIds.producto = null;
+    showProductoForm = false;
     toast(editaba ? "Producto actualizado" : "Producto creado", "success");
     render();
   });
 
-  document.getElementById("prod-editar").addEventListener("click", () => {
-    const id = document.getElementById("prod-id").value.trim();
-    editingIds.producto = id;
-    renderProductos();
-  });
-
-  document.getElementById("prod-eliminar").addEventListener("click", () => {
+  document.getElementById("prod-eliminar")?.addEventListener("click", () => {
     const id = document.getElementById("prod-id").value.trim();
     if (!confirmar("¿Eliminar este producto?")) return;
     state.productos = state.productos.filter((x) => x.id !== id);
     limpiarRecetasPorProducto(id);
     editingIds.producto = null;
+    showProductoForm = false;
     toast("Producto eliminado", "success");
     render();
   });
@@ -1606,13 +1852,15 @@ function cancelarInventarioCreacion() {
   editingIds.detalleInventario = null;
   _invDetalleDraft = { productoId: "", cantidad: 0 };
   _invCabeceraDraft = null;
+  _invProductoBusqueda = "";
+  _invTomaDraft = {};
   renderInventarios();
 }
 
 function sincronizarFiltroInvListaDesdeDom() {
   _invListaFilter = {
     fecha: document.getElementById("f-fecha")?.value || "",
-    nombre: document.getElementById("f-inv")?.value || "",
+    bodegaId: document.getElementById("f-inv-bodega")?.value || "",
     estado: document.getElementById("f-inv-estado")?.value || "activos"
   };
 }
@@ -1755,15 +2003,121 @@ function setupInvBodegaControls(cabeceraFija) {
   actualizarUiBodega(sucursalInicial && !bodegasPorSucursal(sucursalInicial).length);
 }
 
+function escapeAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+async function cargarUsuariosTenant() {
+  if (_usuariosTenantPromise) return _usuariosTenantPromise;
+  _usuariosTenantPromise = (async () => {
+    try {
+      const tenantId = getTenantId();
+      let lista = [];
+      if (window.SUPABASE_ENABLED) {
+        const { supabase } = window.__SB__ || {};
+        if (supabase) {
+          const { data, error } = await supabase
+            .from("usuarios")
+            .select("nombre,email")
+            .eq("tenant_id", tenantId);
+          if (error) throw error;
+          lista = (data || []).map((u) => (u.nombre || u.email || "").trim()).filter(Boolean);
+        }
+      } else {
+        const users = JSON.parse(localStorage.getItem("inventario_app_users_v1") || "[]");
+        lista = users
+          .filter((u) => u.tenantId === tenantId)
+          .map((u) => (u.nombre || u.email || "").trim())
+          .filter(Boolean);
+      }
+      const actual = window.Auth?.currentUser;
+      const propio = (actual?.nombre || actual?.email || "").trim();
+      if (propio && !lista.some((n) => n.toLowerCase() === propio.toLowerCase())) {
+        lista.push(propio);
+      }
+      _usuariosTenantNombres = [...new Set(lista)].sort((a, b) =>
+        a.localeCompare(b, "es", { sensitivity: "base" })
+      );
+    } catch (e) {
+      console.warn("No se pudieron cargar usuarios para autocompletar:", e);
+    }
+    return _usuariosTenantNombres;
+  })();
+  try {
+    return await _usuariosTenantPromise;
+  } finally {
+    _usuariosTenantPromise = null;
+  }
+}
+
+function htmlDatalistUsuariosInv() {
+  return _usuariosTenantNombres
+    .map((nombre) => `<option value="${escapeAttr(nombre)}"></option>`)
+    .join("");
+}
+
+function actualizarDatalistUsuariosInv() {
+  const dl = document.getElementById("inv-usuarios-list");
+  if (!dl) return;
+  dl.innerHTML = htmlDatalistUsuariosInv();
+}
+
+function setupInvFormularioProducto() {
+  const nombreInput = document.getElementById("det-prod-nombre");
+  const idHidden = document.getElementById("det-prod");
+  const detStockInfo = document.getElementById("det-stock-info");
+  const detUmInfo = document.getElementById("det-um");
+  const detCantidad = document.getElementById("det-cantidad");
+  if (!nombreInput || !idHidden) return;
+
+  const sincronizarProductoDesdeNombre = () => {
+    const texto = nombreInput.value.trim();
+    _invProductoBusqueda = texto;
+    const id = resolverProductoIdPorNombre(texto);
+    idHidden.value = id;
+    const prod = id ? byId(state.productos, id) : null;
+    if (detStockInfo) detStockInfo.textContent = prod ? calcularStockVisible(prod) : "—";
+    if (detUmInfo) detUmInfo.textContent = prod?.unidad || "—";
+    if (prod && texto !== prod.nombre) {
+      // keep typed text for autocomplete; don't rewrite until exact match
+    }
+    if (prod && texto.toLowerCase() === String(prod.nombre || "").trim().toLowerCase()) {
+      nombreInput.value = prod.nombre;
+    }
+  };
+
+  nombreInput.addEventListener("input", sincronizarProductoDesdeNombre);
+  nombreInput.addEventListener("change", sincronizarProductoDesdeNombre);
+  nombreInput.addEventListener("blur", sincronizarProductoDesdeNombre);
+
+  if (detCantidad) {
+    detCantidad.addEventListener("input", () => {
+      const digits = String(detCantidad.value).replace(/\D/g, "").slice(0, 6);
+      if (String(detCantidad.value) !== digits) detCantidad.value = digits;
+    });
+  }
+
+  sincronizarProductoDesdeNombre();
+}
+
+async function asegurarUsuariosTenantEnFormInv() {
+  await cargarUsuariosTenant();
+  actualizarDatalistUsuariosInv();
+}
+
 function filtrarInventariosLista() {
   const fecha = _invListaFilter.fecha;
-  const nombreInv = (_invListaFilter.nombre || "").toLowerCase();
+  const bodegaId = _invListaFilter.bodegaId || "";
   const filtroEstado = _invListaFilter.estado || "activos";
   return state.inventarios.filter((i) => {
     const okFecha = !fecha || i.fecha === fecha;
-    const okInv = !nombreInv || (i.nombre || "").toLowerCase().includes(nombreInv);
+    const okBodega = !bodegaId || i.bodegaId === bodegaId;
     const okEstado = inventarioCoincideFiltroEstado(i, filtroEstado);
-    return okFecha && okInv && okEstado;
+    return okFecha && okBodega && okEstado;
   });
 }
 
@@ -1773,7 +2127,8 @@ function renderInventarios() {
   const el = document.getElementById("view-inventarios");
   const data = editingIds.inventario ? byId(state.inventarios, editingIds.inventario) : {};
   const inventarioActual = editingIds.inventario ? byId(state.inventarios, editingIds.inventario) : null;
-  const detalles = inventarioActual?.detalles || [];
+  const detalles = detallesInventarioOrdenados(inventarioActual?.detalles || []);
+  const productosParaInv = productosOrdenadosPorNombre(state.productos);
   const enModoCreacion = showCabeceraInventarioForm || showDetalleInventarioForm;
   const cabeceraFija = showDetalleInventarioForm && editingIds.inventario;
   const cab = cabeceraFija
@@ -1786,7 +2141,7 @@ function renderInventarios() {
       }
     : (_invCabeceraDraft || {
         id: data?.id || uid("INV"),
-        nombre: data?.nombre || "",
+        nombre: data?.nombre || window.Auth?.currentUser?.nombre || window.Auth?.currentUser?.email || "",
         sucursalId: data?.sucursalId || "",
         bodegaId: data?.bodegaId || "",
         fecha: data?.fecha || new Date().toISOString().slice(0, 10)
@@ -1795,17 +2150,16 @@ function renderInventarios() {
     ? detalles.find((d) => d.id === editingIds.detalleInventario)
     : null;
   const productoIdForm = detalleEditando?.productoId || _invDetalleDraft.productoId || "";
-  const cantidadForm = detalleEditando?.cantidad ?? _invDetalleDraft.cantidad ?? 0;
   const prodDetForm = productoIdForm ? byId(state.productos, productoIdForm) : null;
-  const umDetForm = prodDetForm?.unidad || detalleEditando?.unidad || "—";
-  const stockDetForm = prodDetForm ? calcularStockVisible(prodDetForm) : "—";
-  const iconEditar = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm14.71-9.96l-3-3 2-2c.39-.39 1.02-.39 1.41 0l2.59 2.59c.39.39.39 1.02 0 1.41l-2 2-1-1z"/></svg>`;
-  const iconEliminar = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+  const nombreProdForm = prodDetForm?.nombre || _invProductoBusqueda || "";
 
   const invSucursalIdActual = cab.sucursalId || "";
   const invBodegasFiltradas = bodegasPorSucursal(invSucursalIdActual);
   const invSinSucursales = state.sucursales.length === 0;
   const invSinBodegasSucursal = !!invSucursalIdActual && invBodegasFiltradas.length === 0;
+  const filasToma = cabeceraFija
+    ? filasTomaInventario(cab.bodegaId, inventarioActual?.detalles || [])
+    : [];
 
   if (enModoCreacion) {
     el.innerHTML = `
@@ -1817,7 +2171,10 @@ function renderInventarios() {
           <div class="inv-cabecera-grid">
             <div class="inv-cabecera-row">
               <label class="inv-cab-fecha">Fecha<input type="date" id="inv-fecha" value="${cab.fecha}" ${cabeceraFija ? "disabled" : ""} /></label>
-              <label class="inv-cab-nombre">Nombre<input id="inv-nombre" value="${cab.nombre}" ${cabeceraFija ? "disabled" : ""} /></label>
+              <label class="inv-cab-nombre">Usuario
+                <input id="inv-nombre" list="inv-usuarios-list" value="${escapeAttr(cab.nombre)}" ${cabeceraFija ? "disabled" : ""} autocomplete="off" placeholder="Selecciona o escribe el usuario" />
+                <datalist id="inv-usuarios-list">${htmlDatalistUsuariosInv()}</datalist>
+              </label>
             </div>
             <div class="inv-cabecera-row">
               <label class="inv-cab-sucursal">Sucursal
@@ -1841,9 +2198,16 @@ function renderInventarios() {
               </label>
             </div>
           </div>
+          ${showDetalleInventarioForm ? `
+          <div class="inv-prod-entry inv-prod-entry-buscar">
+            <label class="inv-prod-buscar">Buscar producto
+              <input type="search" id="det-prod-nombre" list="inv-productos-list" value="${escapeAttr(nombreProdForm)}" placeholder="Filtrar por nombre..." autocomplete="off" />
+              <datalist id="inv-productos-list">${htmlDatalistProductosInv(productosParaInv)}</datalist>
+            </label>
+          </div>` : ""}
           ${!cabeceraFija ? `
-          <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="inv-guardar">Guardar</button>
+          <div class="actions inv-cabecera-actions">
+            <button type="button" id="inv-guardar">Crear</button>
             <button type="button" id="inv-cancelar" class="btn-link">Cancelar</button>
           </div>` : ""}
         </fieldset>
@@ -1851,52 +2215,40 @@ function renderInventarios() {
 
       ${showDetalleInventarioForm ? `
       <div class="card">
-        <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-          <legend>Productos</legend>
-          <div class="inv-det-wrap">
-            <div class="inv-det-grid">
-              <div class="inv-det-row">
-                <label class="inv-det-nombre">Nombre
-                  <select id="det-prod">
-                    <option value="">--</option>
-                    ${state.productos.map((p) => opcionProductoNombre(p, productoIdForm)).join("")}
-                  </select>
-                </label>
-                <label class="inv-det-cantidad">Cantidad<input type="number" id="det-cantidad" value="${cantidadForm}" min="0" max="999999" inputmode="numeric" /></label>
-              </div>
-              <div class="inv-det-row inv-det-row-meta">
-                <label class="inv-det-um">U. de Med.
-                  <div id="det-um" class="stock-display">${umDetForm}</div>
-                </label>
-                <label class="inv-det-stock">Stock
-                  <div id="det-stock-info" class="stock-display">${stockDetForm}</div>
-                </label>
-                <div class="inv-add-cell">
-                  <span class="inv-add-label" aria-hidden="true">&nbsp;</span>
-                  <button type="button" class="btn-inv-add" id="det-agregar" title="${detalleEditando ? "Actualizar producto" : "Agregar producto"}">+</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </fieldset>
-        <h4 style="margin-top:14px;">Movimientos ingresados</h4>
+        <div class="inv-toma-head">
+          <h4 style="margin:0;">Productos de la bodega</h4>
+          <span class="small" id="inv-toma-count">${filasToma.length} productos</span>
+        </div>
         <div class="table-scroll">
-        <table class="inv-detalle-table">
+        <table class="inv-toma-table">
           <thead>
-            <tr><th>Nombre</th><th>Cantidad</th><th>U. de Med.</th><th>Stock</th><th>Acciones</th></tr>
+            <tr>
+              <th class="inv-toma-check-col"><input type="checkbox" id="inv-check-all" title="Seleccionar todos" /></th>
+              <th>Nombre</th>
+              <th>Uni. de Med.</th>
+              <th>Stock</th>
+              <th>Cantidad</th>
+            </tr>
           </thead>
           <tbody>
-            ${detalles.length
-              ? detalles.map((d) => {
-                  const prod = byId(state.productos, d.productoId);
-                  const unidad = d.unidad || prod?.unidad || "";
-                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${d.cantidad}</td><td>${unidad}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td><td><button class="btn-icon btn-det-editar" data-id="${d.id}" title="Editar">${iconEditar}</button><button class="btn-icon danger btn-det-eliminar" data-id="${d.id}" title="Eliminar">${iconEliminar}</button></td></tr>`;
-                }).join("")
-              : `<tr><td colspan="5" class="small">Sin movimientos ingresados.</td></tr>`}
+            ${filasToma.length === 0
+              ? `<tr><td colspan="5" class="small">No hay productos en el catálogo. Crea productos primero.</td></tr>`
+              : filasToma.map((f) => {
+                    const p = f.producto;
+                    const oculta = busquedaOcultaFila(p.nombre, _invProductoBusqueda);
+                    return `<tr class="inv-toma-row"${oculta ? ' style="display:none"' : ""} data-producto-id="${escapeAttr(p.id)}" data-stock="${f.stock}" data-prod-nombre="${escapeAttr(p.nombre || "")}">
+                      <td class="inv-toma-check-col"><input type="checkbox" class="inv-toma-check" ${f.checked ? "checked" : ""} /></td>
+                      <td>${escapeAttr(p.nombre || "")}</td>
+                      <td>${escapeAttr(p.unidad || "—")}</td>
+                      <td class="inv-toma-stock">${f.stock}</td>
+                      <td><input type="number" class="inv-toma-cant" value="${f.cantidad}" min="0" max="999999" inputmode="numeric" /></td>
+                    </tr>`;
+                  }).join("")}
           </tbody>
         </table>
         </div>
-        <div class="actions inv-salir-wrap">
+        <div class="actions inv-salir-wrap inv-toma-actions">
+          <button type="button" id="det-actualizar">Actualizar</button>
           <button type="button" id="det-guardar">Guardar</button>
           <button type="button" id="inv-salir">Salir</button>
         </div>
@@ -1904,6 +2256,7 @@ function renderInventarios() {
     `;
 
     if (showCabeceraInventarioForm && !cabeceraFija) {
+      asegurarUsuariosTenantEnFormInv();
       setupInvBodegaControls(cabeceraFija);
       document.getElementById("inv-cancelar")?.addEventListener("click", () => {
         if (confirmar("¿Cancelar la creación del inventario? No se guardará.")) {
@@ -1929,7 +2282,7 @@ function renderInventarios() {
           detalles: data?.detalles || [],
           estado: prev?.estado === "cerrado" ? "cerrado" : "borrador"
         };
-        if (!item.nombre) { toast("El nombre es obligatorio", "warn"); return; }
+        if (!item.nombre) { toast("El usuario es obligatorio", "warn"); return; }
         if (!item.sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
         if (!item.bodegaId) { toast("Selecciona o agrega una bodega", "warn"); return; }
         const i = state.inventarios.findIndex((x) => x.id === item.id);
@@ -1939,66 +2292,96 @@ function renderInventarios() {
         showDetalleInventarioForm = true;
         _invCabeceraDraft = null;
         await saveData();
-        toast("Cabecera guardada. Ahora agrega productos.", "success");
+        toast("Cabecera guardada. Ahora cuenta los productos de la bodega.", "success");
         renderInventarios();
       });
     }
 
     if (showDetalleInventarioForm) {
-      const detProdSel = document.getElementById("det-prod");
-      const detStockInfo = document.getElementById("det-stock-info");
-      const detUmInfo = document.getElementById("det-um");
-      const actualizarCamposDetalleProducto = () => {
-        const prod = byId(state.productos, detProdSel?.value);
-        if (detStockInfo) {
-          detStockInfo.textContent = prod ? calcularStockVisible(prod) : "—";
-        }
-        if (detUmInfo) {
-          detUmInfo.textContent = prod?.unidad || "—";
-        }
-      };
-      if (detProdSel) {
-        detProdSel.addEventListener("change", actualizarCamposDetalleProducto);
-        if (detProdSel.value) actualizarCamposDetalleProducto();
+      const buscarInput = document.getElementById("det-prod-nombre");
+      if (buscarInput) {
+        buscarInput.addEventListener("input", () => filtrarFilasTomaPorBusqueda(buscarInput.value));
+        if (_invProductoBusqueda) filtrarFilasTomaPorBusqueda(_invProductoBusqueda);
       }
 
-      const detCantidad = document.getElementById("det-cantidad");
-      if (detCantidad) {
-        detCantidad.addEventListener("input", () => {
-          const digits = String(detCantidad.value).replace(/\D/g, "").slice(0, 6);
-          if (String(detCantidad.value) !== digits) detCantidad.value = digits;
+      document.querySelectorAll(".inv-toma-cant").forEach((input) => {
+        input.addEventListener("input", () => {
+          const digits = String(input.value).replace(/\D/g, "").slice(0, 6);
+          if (String(input.value) !== digits) input.value = digits;
+          const row = input.closest(".inv-toma-row");
+          const check = row?.querySelector(".inv-toma-check");
+          if (check && Number(input.value) > 0) check.checked = true;
+          capturarInvTomaDraftDesdeDom();
+        });
+      });
+
+      document.querySelectorAll(".inv-toma-check").forEach((check) => {
+        check.addEventListener("change", () => capturarInvTomaDraftDesdeDom());
+      });
+
+      const checkAll = document.getElementById("inv-check-all");
+      if (checkAll) {
+        const visibles = [...document.querySelectorAll(".inv-toma-row .inv-toma-check")];
+        checkAll.checked = visibles.length > 0 && visibles.every((c) => c.checked);
+        checkAll.addEventListener("change", () => {
+          visibles.forEach((c) => { c.checked = checkAll.checked; });
+          capturarInvTomaDraftDesdeDom();
         });
       }
 
-      const agregarProducto = async () => {
-        if (!editingIds.inventario) { toast("No hay un inventario activo", "warn"); return false; }
+      document.getElementById("det-actualizar")?.addEventListener("click", async () => {
         const inv = byId(state.inventarios, editingIds.inventario);
-        if (!inv) return false;
+        if (!inv) { toast("No hay un inventario activo", "warn"); return; }
         if (inv.estado === "anulado") {
-          toast("Este inventario está anulado y no se puede modificar", "warn");
-          return false;
+          toast("Este inventario está anulado", "warn");
+          return;
         }
-        const productoId = document.getElementById("det-prod").value;
-        const cantidad = Number(document.getElementById("det-cantidad").value || 0);
-        const prodSel = byId(state.productos, productoId);
-        const unidad = prodSel?.unidad || "";
-        if (!productoId) { toast("Selecciona producto", "warn"); return false; }
-        if (!unidad) { toast("El producto no tiene unidad de medida definida", "warn"); return false; }
+        capturarInvTomaDraftDesdeDom();
+        const seleccionadas = [...document.querySelectorAll(".inv-toma-row")].filter((row) =>
+          row.querySelector(".inv-toma-check")?.checked
+        );
+        if (!seleccionadas.length) {
+          toast("Selecciona al menos una línea para actualizar", "warn");
+          return;
+        }
         if (!inv.detalles) inv.detalles = [];
-        if (editingIds.detalleInventario) {
-          const idx = inv.detalles.findIndex((d) => d.id === editingIds.detalleInventario);
-          if (idx >= 0) inv.detalles[idx] = { ...inv.detalles[idx], productoId, cantidad, unidad };
-          editingIds.detalleInventario = null;
-        } else {
-          inv.detalles.push({ id: uid("DET"), productoId, cantidad, unidad });
-        }
-        _invDetalleDraft = { productoId: "", cantidad: 0 };
-        await saveData();
-        renderInventarios();
-        return true;
-      };
+        let aplicados = 0;
+        seleccionadas.forEach((row) => {
+          const productoId = row.dataset.productoId;
+          const prod = byId(state.productos, productoId);
+          if (!prod) return;
+          const cantidad = Number(row.querySelector(".inv-toma-cant")?.value || 0);
+          const stockRef = Number(row.dataset.stock || 0);
+          const unidad = prod.unidad || "";
+          const idx = inv.detalles.findIndex((d) => d.productoId === productoId);
+          const itemDet = {
+            id: idx >= 0 ? inv.detalles[idx].id : uid("DET"),
+            productoId,
+            cantidad,
+            unidad,
+            stockReferencia: stockRef
+          };
+          if (idx >= 0) inv.detalles[idx] = { ...inv.detalles[idx], ...itemDet };
+          else inv.detalles.push(itemDet);
 
-      document.getElementById("det-agregar").addEventListener("click", () => { agregarProducto(); });
+          aplicarAjusteStockBodega({
+            productoId,
+            bodegaId: inv.bodegaId,
+            sucursalId: inv.sucursalId,
+            sucursal: inv.sucursal,
+            fecha: inv.fecha,
+            stockActual: stockRef,
+            cantidadNueva: cantidad,
+            nombreInv: inv.nombre
+          });
+          aplicados += 1;
+          _invTomaDraft[productoId] = { checked: true, cantidad };
+        });
+        if (inv.estado !== "cerrado") inv.estado = "borrador";
+        await saveData();
+        toast(`Stock actualizado en ${aplicados} producto${aplicados === 1 ? "" : "s"}`, "success");
+        renderInventarios();
+      });
 
       document.getElementById("det-guardar").addEventListener("click", async () => {
         const inv = byId(state.inventarios, editingIds.inventario);
@@ -2007,13 +2390,28 @@ function renderInventarios() {
           toast("Este inventario está anulado", "warn");
           return;
         }
-        const draft = capturarInvDetalleDesdeDom();
-        if (draft.productoId) {
-          const ok = await agregarProducto();
-          if (!ok) return;
-        }
+        capturarInvTomaDraftDesdeDom();
+        if (!inv.detalles) inv.detalles = [];
+        document.querySelectorAll(".inv-toma-row").forEach((row) => {
+          const checked = row.querySelector(".inv-toma-check")?.checked;
+          const cantidad = Number(row.querySelector(".inv-toma-cant")?.value || 0);
+          if (!checked && !(cantidad > 0)) return;
+          const productoId = row.dataset.productoId;
+          const prod = byId(state.productos, productoId);
+          if (!prod) return;
+          const idx = inv.detalles.findIndex((d) => d.productoId === productoId);
+          const itemDet = {
+            id: idx >= 0 ? inv.detalles[idx].id : uid("DET"),
+            productoId,
+            cantidad,
+            unidad: prod.unidad || "",
+            stockReferencia: Number(row.dataset.stock || 0)
+          };
+          if (idx >= 0) inv.detalles[idx] = { ...inv.detalles[idx], ...itemDet };
+          else inv.detalles.push(itemDet);
+        });
         if (!(inv.detalles || []).length) {
-          toast("Agrega al menos un producto con + antes de guardar", "warn");
+          toast("Marca o ingresa cantidad en al menos un producto antes de guardar", "warn");
           return;
         }
         inv.estado = "cerrado";
@@ -2024,37 +2422,26 @@ function renderInventarios() {
         editingIds.detalleInventario = null;
         _invDetalleDraft = { productoId: "", cantidad: 0 };
         _invCabeceraDraft = null;
+        _invProductoBusqueda = "";
+        _invTomaDraft = {};
         toast("Inventario cerrado y guardado", "success");
         render();
       });
 
       document.getElementById("inv-salir")?.addEventListener("click", () => {
-        const draft = capturarInvDetalleDesdeDom();
-        if (draft.productoId && !confirmar("Hay un producto sin agregar con +. ¿Salir sin incluirlo?")) return;
+        capturarInvTomaDraftDesdeDom();
+        const hayPendiente = Object.values(_invTomaDraft).some((d) => d.checked || Number(d.cantidad) > 0);
+        if (hayPendiente && !confirmar("Hay cantidades o selecciones sin guardar. ¿Salir de todos modos?")) return;
         showCabeceraInventarioForm = false;
         showDetalleInventarioForm = false;
         showVerInventario = false;
         editingIds.detalleInventario = null;
         _invDetalleDraft = { productoId: "", cantidad: 0 };
         _invCabeceraDraft = null;
+        _invProductoBusqueda = "";
+        _invTomaDraft = {};
         renderInventarios();
       });
-
-      document.querySelectorAll(".btn-det-editar").forEach((b) => b.addEventListener("click", (e) => {
-        e.stopPropagation();
-        editingIds.detalleInventario = b.dataset.id;
-        renderInventarios();
-      }));
-
-      document.querySelectorAll(".btn-det-eliminar").forEach((b) => b.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const inv = byId(state.inventarios, editingIds.inventario);
-        if (!inv) return;
-        inv.detalles = (inv.detalles || []).filter((d) => d.id !== b.dataset.id);
-        if (editingIds.detalleInventario === b.dataset.id) editingIds.detalleInventario = null;
-        await saveData();
-        renderInventarios();
-      }));
     }
 
     return;
@@ -2062,7 +2449,7 @@ function renderInventarios() {
 
   const inventariosFiltrados = filtrarInventariosLista();
   const invVer = showVerInventario && inventarioActual ? inventarioActual : null;
-  const detallesVer = invVer?.detalles || [];
+  const detallesVer = detallesInventarioOrdenados(invVer?.detalles || []);
   const admin = esAdmin();
 
   el.innerHTML = `
@@ -2070,7 +2457,14 @@ function renderInventarios() {
       <h3>Filtros</h3>
       <div class="grid inv-lista-filtros">
         <label>Fecha<input type="date" id="f-fecha" value="${_invListaFilter.fecha}" /></label>
-        <label>Nombre Inventario<input id="f-inv" value="${_invListaFilter.nombre}" /></label>
+        <label>Bodega
+          <select id="f-inv-bodega">
+            <option value="">Todas</option>
+            ${productosOrdenadosPorNombre(state.bodegas).map((b) =>
+              `<option value="${b.id}" ${_invListaFilter.bodegaId === b.id ? "selected" : ""}>${b.nombre}</option>`
+            ).join("")}
+          </select>
+        </label>
         <label>Estado
           <select id="f-inv-estado">
             <option value="activos" ${_invListaFilter.estado === "activos" ? "selected" : ""}>Activos (sin anulados)</option>
@@ -2151,7 +2545,7 @@ function renderInventarios() {
     sincronizarFiltroInvListaDesdeDom();
     renderInventarios();
   };
-  ["f-fecha", "f-inv", "f-inv-estado"].forEach((id) => {
+  ["f-fecha", "f-inv-bodega", "f-inv-estado"].forEach((id) => {
     const input = document.getElementById(id);
     if (!input) return;
     input.addEventListener("change", aplicarFiltroInvLista);
@@ -2541,13 +2935,13 @@ async function boot() {
   window.DataLayer.setOnChange((nuevoState) => {
     const invId = editingIds.inventario;
     const invLocal = invId ? byId(state.inventarios, invId) : null;
-    state.productos = nuevoState.productos;
-    state.familias = nuevoState.familias;
-    state.categorias = nuevoState.categorias;
-    state.sucursales = nuevoState.sucursales;
-    state.bodegas = nuevoState.bodegas;
-    state.movimientos = nuevoState.movimientos;
-    state.inventarios = nuevoState.inventarios;
+    state.productos = Array.isArray(nuevoState.productos) ? nuevoState.productos : [];
+    state.familias = Array.isArray(nuevoState.familias) ? nuevoState.familias : [];
+    state.categorias = Array.isArray(nuevoState.categorias) ? nuevoState.categorias : [];
+    state.sucursales = Array.isArray(nuevoState.sucursales) ? nuevoState.sucursales : [];
+    state.bodegas = Array.isArray(nuevoState.bodegas) ? nuevoState.bodegas : [];
+    state.movimientos = Array.isArray(nuevoState.movimientos) ? nuevoState.movimientos : [];
+    state.inventarios = Array.isArray(nuevoState.inventarios) ? nuevoState.inventarios : [];
     state.recetas = nuevoState.recetas || {};
     normalizarInventariosEstado();
     if (invLocal && _formularioInventarioActivo()) {
