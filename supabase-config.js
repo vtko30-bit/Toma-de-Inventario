@@ -15,8 +15,8 @@
 // definidas en supabase-schema.sql.
 
 window.SUPABASE_CONFIG = {
-  url: "https://tfxbubyepgmedtukzpjt.supabase.co",
-  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmeGJ1YnllcGdtZWR0dWt6cGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxODA0MjAsImV4cCI6MjA5Mzc1NjQyMH0.mWvjw2hCZOyhy51Ml6BxrWt-c-HWEfmXOo15XFzzrDs"
+  url: "https://vwoqjbyyxcrbcqrjiksk.supabase.co",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3b3FqYnl5eGNyYmNxcmppa3NrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzODgxMjIsImV4cCI6MjA5OTk2NDEyMn0.xw_losdhK2MEv62sNxKnFlfEVOwlM1q5t0v5M_Q1bzM"
 };
 
 window.SUPABASE_ENABLED = Object.values(window.SUPABASE_CONFIG).every(
