@@ -9,6 +9,8 @@ const DataLayer = {
   _onChange: null,
   _tenantId: null,
   loadFailed: false,
+  loadErrorMessage: "",
+  _writeLock: false,
 
   _emptyState() {
     return {
@@ -32,6 +34,7 @@ const DataLayer = {
   },
 
   _emit() {
+    if (this._writeLock) return;
     if (this._onChange) this._onChange(this.getState());
   },
 
@@ -73,6 +76,8 @@ const DataLayer = {
     } else {
       this._state = this._emptyState();
     }
+    this.loadFailed = false;
+    this.loadErrorMessage = "";
     this._emit();
   },
 
@@ -84,39 +89,78 @@ const DataLayer = {
     const { supabase } = window.__SB__;
     this._state = this._emptyState();
     this.loadFailed = false;
+    this.loadErrorMessage = "";
 
-    const timeoutQuery = (p) =>
+    const timeoutQuery = (p, ms = 15000) =>
       Promise.race([
         p,
-        new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: "timeout" } }), 8000))
+        new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: "timeout" } }), ms))
       ]);
 
-    const errores = [];
-    const tareasColecciones = COLLECTIONS.map((col) =>
-      timeoutQuery(supabase.from(col).select("id,data").eq("tenant_id", tenantId)).then(({ data, error }) => {
-        if (!error && data) {
-          this._state[col] = data.map((r) => ({ id: r.id, ...(r.data || {}) }));
+    const cargarTodo = async () => {
+      const errores = [];
+      let colOk = 0;
+      let colErr = 0;
+
+      const tareasColecciones = COLLECTIONS.map((col) =>
+        timeoutQuery(supabase.from(col).select("id,data").eq("tenant_id", tenantId)).then(({ data, error }) => {
+          if (!error && data) {
+            this._state[col] = data.map((r) => ({ id: r.id, ...(r.data || {}) }));
+            colOk += 1;
+          } else if (error) {
+            console.warn(`Error cargando ${col}:`, error.message);
+            errores.push(`${col}: ${error.message}`);
+            colErr += 1;
+          }
+        })
+      );
+
+      const tareaRecetas = timeoutQuery(
+        supabase.from("config").select("data").eq("tenant_id", tenantId).eq("key", "recetas").maybeSingle()
+      ).then(({ data, error }) => {
+        if (!error) {
+          this._state.recetas = data?.data || {};
         } else if (error) {
-          console.warn(`Error cargando ${col}:`, error.message);
-          errores.push(`${col}: ${error.message}`);
+          errores.push(`config: ${error.message}`);
         }
-      })
-    );
+      });
 
-    const tareaRecetas = timeoutQuery(
-      supabase.from("config").select("data").eq("tenant_id", tenantId).eq("key", "recetas").maybeSingle()
-    ).then(({ data, error }) => {
-      if (!error) this._state.recetas = data?.data || {};
-    });
+      await Promise.all([...tareasColecciones, tareaRecetas]);
+      return { errores, colOk, colErr };
+    };
 
-    await Promise.all([...tareasColecciones, tareaRecetas]);
-    if (errores.length) {
-      this.loadFailed = true;
-      console.error("Carga parcial; bloqueando guardado para no perder datos:", errores);
+    let { errores, colOk, colErr } = await cargarTodo();
+
+    // Reintento único si ninguna colección cargó (p. ej. cold start de Supabase free)
+    if (colOk === 0 && errores.length) {
+      console.warn("Carga inicial falló, reintentando...", errores);
+      await new Promise((r) => setTimeout(r, 1200));
+      ({ errores, colOk, colErr } = await cargarTodo());
     }
-    this._emit();
 
+    // Solo bloquear guardado si la carga de colecciones fue PARCIAL
+    if (colOk > 0 && colErr > 0) {
+      this.loadFailed = true;
+      this.loadErrorMessage = errores.join("; ");
+      console.error("Carga parcial; bloqueando guardado para no perder datos:", errores);
+    } else if (colOk === 0 && errores.length) {
+      this.loadFailed = false;
+      this.loadErrorMessage = errores.join("; ");
+      console.warn("No se pudo cargar datos remotos; se inicia vacío:", errores);
+    } else {
+      this.loadFailed = false;
+      this.loadErrorMessage = "";
+    }
+
+    this._emit();
+    this._subscribeRealtime(tenantId);
+  },
+
+  _subscribeRealtime(tenantId) {
+    if (!window.SUPABASE_ENABLED || !window.__SB__) return;
+    const { supabase } = window.__SB__;
     const sufijo = Math.random().toString(36).slice(2, 10);
+
     for (const col of COLLECTIONS) {
       const channel = supabase
         .channel(`${col}-${tenantId}-${sufijo}`)
@@ -141,11 +185,13 @@ const DataLayer = {
   },
 
   async _refreshCollection(tenantId, col) {
+    if (this._writeLock) return;
     const { supabase } = window.__SB__;
     const { data, error } = await supabase
       .from(col)
       .select("id,data")
       .eq("tenant_id", tenantId);
+    if (this._writeLock) return;
     if (!error && data) {
       this._state[col] = data.map((r) => ({ id: r.id, ...(r.data || {}) }));
       this._emit();
@@ -153,6 +199,7 @@ const DataLayer = {
   },
 
   async _refreshRecetas(tenantId) {
+    if (this._writeLock) return;
     const { supabase } = window.__SB__;
     const { data } = await supabase
       .from("config")
@@ -160,6 +207,7 @@ const DataLayer = {
       .eq("tenant_id", tenantId)
       .eq("key", "recetas")
       .maybeSingle();
+    if (this._writeLock) return;
     this._state.recetas = data?.data || {};
     this._emit();
   },

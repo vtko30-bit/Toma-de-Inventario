@@ -252,7 +252,9 @@ function capturarCabeceraMovDesdeDom() {
 
 let _suppressNextSave = false;
 let _saving = false;
+let _saveQueued = false;
 let _renderTimer = null;
+let _saveHintShown = false;
 
 function _hayInputEnfocado() {
   const el = document.activeElement;
@@ -266,6 +268,10 @@ function programarRender() {
   if (_renderTimer) clearTimeout(_renderTimer);
   _renderTimer = setTimeout(() => {
     _renderTimer = null;
+    if (_saving || window.DataLayer?._writeLock) {
+      programarRender();
+      return;
+    }
     if (_formularioInventarioActivo()) {
       preservarBorradoresInventario();
       if (_hayInputEnfocado()) {
@@ -310,30 +316,65 @@ function getTenantId() {
 async function saveData() {
   if (_suppressNextSave) {
     _suppressNextSave = false;
-    return;
+    return true;
   }
-  if (!window.Auth?.currentUser) return;
+  if (!window.Auth?.currentUser) return false;
   const tenantId = getTenantId();
   if (window.SUPABASE_ENABLED) {
-    if (_saving) return;
+    if (_saving) {
+      _saveQueued = true;
+      return false;
+    }
     if (window.DataLayer.loadFailed) {
-      toast("La carga inicial falló. Refresca la página antes de guardar para evitar perder datos.", "error", 6000);
-      return;
+      toast(
+        "La carga inicial fue incompleta. Refresca la página (Ctrl+Shift+R) antes de guardar para no perder datos." +
+          (window.DataLayer.loadErrorMessage ? ` (${window.DataLayer.loadErrorMessage})` : ""),
+        "error",
+        7000
+      );
+      return false;
     }
     _saving = true;
+    window.DataLayer._writeLock = true;
     const colecciones = ["productos", "familias", "categorias", "sucursales", "bodegas", "movimientos", "inventarios"];
+    // Capturar snapshot ya, antes de que realtime pueda mutar state
+    const snapshot = {};
+    colecciones.forEach((c) => {
+      snapshot[c] = Array.isArray(state[c]) ? state[c].map((x) => ({ ...x })) : [];
+    });
+    const recetasSnap = state.recetas && typeof state.recetas === "object" ? JSON.parse(JSON.stringify(state.recetas)) : {};
     try {
-      await Promise.all(colecciones.map((c) => window.DataLayer.replaceCollection(tenantId, c, state[c] || [])));
-      await window.DataLayer.saveRecetas(tenantId, state.recetas || {});
+      await Promise.all(colecciones.map((c) => window.DataLayer.replaceCollection(tenantId, c, snapshot[c])));
+      await window.DataLayer.saveRecetas(tenantId, recetasSnap);
+      // Mantener DataLayer alineado con lo guardado
+      colecciones.forEach((c) => {
+        window.DataLayer._state[c] = snapshot[c];
+      });
+      window.DataLayer._state.recetas = recetasSnap;
+      return true;
     } catch (e) {
       console.error("Error guardando datos:", e);
-      toast("Error al guardar: " + (e.message || e), "error", 5000);
+      const msg = e.message || String(e);
+      let ayuda = "";
+      if (/row-level security|RLS|permission|policy/i.test(msg)) {
+        ayuda = " Revisa que tu usuario exista en la tabla usuarios de Supabase y que ejecutaste supabase-schema.sql.";
+      } else if (/timeout|network|fetch/i.test(msg)) {
+        ayuda = " Revisa tu conexión e inténtalo de nuevo.";
+      }
+      toast("Error al guardar: " + msg + ayuda, "error", 7000);
+      return false;
     } finally {
+      window.DataLayer._writeLock = false;
       _saving = false;
+      if (_saveQueued) {
+        _saveQueued = false;
+        setTimeout(() => saveData(), 50);
+      }
     }
   } else {
     window.DataLayer._state = state;
     window.DataLayer._saveLocal(tenantId);
+    return true;
   }
 }
 
@@ -956,7 +997,7 @@ function renderProductos() {
     renderProductos();
   });
 
-  document.getElementById("prod-guardar").addEventListener("click", () => {
+  document.getElementById("prod-guardar").addEventListener("click", async () => {
     const id = document.getElementById("prod-id").value.trim();
     const prev = byId(state.productos, id);
     const item = {
@@ -992,18 +1033,24 @@ function renderProductos() {
     else state.productos.push(item);
     editingIds.producto = null;
     showProductoForm = true;
+    const ok = await saveData();
+    if (!ok) return;
     toast(editaba ? "Producto actualizado" : "Producto creado", "success");
+    _suppressNextSave = true;
     render();
   });
 
-  document.getElementById("prod-eliminar")?.addEventListener("click", () => {
+  document.getElementById("prod-eliminar")?.addEventListener("click", async () => {
     const id = document.getElementById("prod-id").value.trim();
     if (!confirmar("¿Eliminar este producto?")) return;
     state.productos = state.productos.filter((x) => x.id !== id);
     limpiarRecetasPorProducto(id);
     editingIds.producto = null;
     showProductoForm = true;
+    const ok = await saveData();
+    if (!ok) return;
     toast("Producto eliminado", "success");
+    _suppressNextSave = true;
     render();
   });
 }
@@ -1256,7 +1303,7 @@ function simpleCrudView(containerId, title, keyName, editingKey) {
     });
   });
 
-  document.getElementById(`${editingKey}-guardar`).addEventListener("click", () => {
+  document.getElementById(`${editingKey}-guardar`).addEventListener("click", async () => {
     const item = {
       id: document.getElementById(`${editingKey}-id`).value.trim(),
       nombre: document.getElementById(`${editingKey}-nombre`).value.trim()
@@ -1267,7 +1314,10 @@ function simpleCrudView(containerId, title, keyName, editingKey) {
     if (editaba) list[i] = item;
     else list.push(item);
     editingIds[editingKey] = null;
+    const ok = await saveData();
+    if (!ok) return;
     toast(`${title.replace(/s$/, "")} ${editaba ? "actualizada" : "creada"}`, "success");
+    _suppressNextSave = true;
     render();
   });
 
@@ -1276,12 +1326,15 @@ function simpleCrudView(containerId, title, keyName, editingKey) {
     simpleCrudView(containerId, title, keyName, editingKey);
   });
 
-  document.getElementById(`${editingKey}-eliminar`).addEventListener("click", () => {
+  document.getElementById(`${editingKey}-eliminar`).addEventListener("click", async () => {
     if (!confirmar(`¿Eliminar este registro?`)) return;
     const id = document.getElementById(`${editingKey}-id`).value.trim();
     state[keyName] = state[keyName].filter((x) => x.id !== id);
     editingIds[editingKey] = null;
+    const ok = await saveData();
+    if (!ok) return;
     toast("Eliminado", "success");
+    _suppressNextSave = true;
     render();
   });
 }
@@ -2310,7 +2363,11 @@ function renderInventarios() {
         editingIds.inventario = item.id;
         showDetalleInventarioForm = true;
         _invCabeceraDraft = null;
-        await saveData();
+        const ok = await saveData();
+        if (!ok) {
+          toast("No se pudo guardar el inventario. Revisa el mensaje de error e inténtalo de nuevo.", "error", 6000);
+          return;
+        }
         toast("Cabecera guardada. Ahora cuenta los productos de la bodega.", "success");
         renderInventarios();
       });
@@ -2778,6 +2835,12 @@ function setupAuthUI() {
         document.getElementById("userInfo").innerHTML = `${user.nombre || user.email}<br><small>${user.email}</small><span class="role-badge">${etiquetaRol(user.role)}</span>`;
         aplicarPermisosPorRol();
         await window.DataLayer.load(user.tenantId);
+        if (window.DataLayer.loadFailed) {
+          toast("Carga incompleta de datos. Refresca con Ctrl+Shift+R antes de editar.", "error", 7000);
+        } else if (window.DataLayer.loadErrorMessage && !_saveHintShown) {
+          _saveHintShown = true;
+          toast("No se pudo leer la nube al inicio; puedes crear datos y se intentará guardar.", "warn", 6000);
+        }
       } else {
         shell.style.display = "none";
         screen.style.display = "";
@@ -2955,6 +3018,7 @@ async function boot() {
   setupServiceWorker();
 
   window.DataLayer.setOnChange((nuevoState) => {
+    if (_saving || window.DataLayer._writeLock) return;
     const invId = editingIds.inventario;
     const invLocal = invId ? byId(state.inventarios, invId) : null;
     state.productos = Array.isArray(nuevoState.productos) ? nuevoState.productos : [];
