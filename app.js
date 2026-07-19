@@ -57,11 +57,68 @@ function normalizarEstadoInventario(inv) {
   return (inv.detalles || []).length > 0 ? "cerrado" : "borrador";
 }
 
+function generarFolioInventario(fecha) {
+  const clave = String(fecha || new Date().toISOString().slice(0, 10)).replace(/-/g, "");
+  const prefijo = `INV-${clave}-`;
+  let max = 0;
+  (state.inventarios || []).forEach((inv) => {
+    const folio = String(inv.folio || "");
+    if (!folio.startsWith(prefijo)) return;
+    const n = Number(folio.slice(prefijo.length));
+    if (Number.isFinite(n) && n > max) max = n;
+  });
+  return `${prefijo}${String(max + 1).padStart(3, "0")}`;
+}
+
+function horaActualInventario() {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function folioInventario(inv) {
+  if (!inv) return "—";
+  return inv.folio || inv.id || "—";
+}
+
+function horaInventario(inv) {
+  if (!inv) return "";
+  if (inv.hora) return inv.hora;
+  if (inv.createdAt) {
+    const d = new Date(inv.createdAt);
+    if (!Number.isNaN(d.getTime())) {
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+  }
+  return "";
+}
+
+function etiquetaFechaHoraInventario(inv) {
+  const fecha = inv?.fecha || "";
+  const hora = horaInventario(inv);
+  return hora ? `${fecha} ${hora}` : fecha;
+}
+
 function normalizarInventariosEstado() {
-  state.inventarios = (state.inventarios || []).map((inv) => ({
-    ...inv,
-    estado: normalizarEstadoInventario(inv)
-  }));
+  state.inventarios = (state.inventarios || []).map((inv) => {
+    const fecha = inv.fecha || new Date().toISOString().slice(0, 10);
+    let folio = inv.folio;
+    if (!folio) {
+      // Folio estable para registros viejos (no reenumera)
+      const clave = String(fecha).replace(/-/g, "");
+      const sufijo = String(inv.id || "").replace(/\W/g, "").slice(-4).toUpperCase() || "0001";
+      folio = `INV-${clave}-${sufijo}`;
+    }
+    return {
+      ...inv,
+      fecha,
+      folio,
+      hora: inv.hora || horaInventario(inv) || "",
+      createdAt: inv.createdAt || "",
+      estado: normalizarEstadoInventario(inv)
+    };
+  });
 }
 
 function etiquetaEstadoInventario(estado) {
@@ -2302,17 +2359,21 @@ function renderInventarios() {
   const cab = cabeceraFija
     ? {
         id: data?.id || "",
+        folio: data?.folio || folioInventario(data),
         nombre: data?.nombre || "",
         sucursalId: data?.sucursalId || state.sucursales.find((s) => s.nombre === data?.sucursal)?.id || "",
         bodegaId: data?.bodegaId || "",
-        fecha: data?.fecha || new Date().toISOString().slice(0, 10)
+        fecha: data?.fecha || new Date().toISOString().slice(0, 10),
+        hora: horaInventario(data)
       }
     : (_invCabeceraDraft || {
         id: data?.id || uid("INV"),
+        folio: data?.folio || "",
         nombre: data?.nombre || window.Auth?.currentUser?.nombre || window.Auth?.currentUser?.email || "",
         sucursalId: data?.sucursalId || "",
         bodegaId: data?.bodegaId || "",
-        fecha: data?.fecha || new Date().toISOString().slice(0, 10)
+        fecha: data?.fecha || new Date().toISOString().slice(0, 10),
+        hora: data?.hora || ""
       });
   const detalleEditando = editingIds.detalleInventario
     ? detalles.find((d) => d.id === editingIds.detalleInventario)
@@ -2336,6 +2397,7 @@ function renderInventarios() {
           <legend>Datos del Inventario</legend>
           ${invSinSucursales && !cabeceraFija ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
           <input type="hidden" id="inv-id" value="${cab.id}" />
+          ${cabeceraFija ? `<p class="inv-folio-badge">Folio <strong>${escapeAttr(cab.folio || "—")}</strong>${cab.hora ? ` · ${escapeAttr(cab.hora)}` : ""}</p>` : ""}
           <div class="inv-cabecera-grid">
             <div class="inv-cabecera-row">
               <label class="inv-cab-fecha">Fecha<input type="date" id="inv-fecha" value="${cab.fecha}" ${cabeceraFija ? "disabled" : ""} /></label>
@@ -2449,13 +2511,18 @@ function renderInventarios() {
           toast("No se puede editar un inventario anulado", "warn");
           return;
         }
+        const fecha = document.getElementById("inv-fecha").value;
+        const ahoraIso = new Date().toISOString();
         const item = {
           id: document.getElementById("inv-id").value.trim(),
+          folio: prev?.folio || generarFolioInventario(fecha),
           nombre: document.getElementById("inv-nombre").value.trim(),
           sucursalId,
           sucursal: sucursalNombre,
           bodegaId: document.getElementById("inv-bodega").value,
-          fecha: document.getElementById("inv-fecha").value,
+          fecha,
+          hora: prev?.hora || horaActualInventario(),
+          createdAt: prev?.createdAt || ahoraIso,
           detalles: data?.detalles || [],
           estado: prev?.estado === "cerrado" ? "cerrado" : "borrador"
         };
@@ -2730,14 +2797,14 @@ function renderInventarios() {
       ${inventariosFiltrados.length === 0
         ? '<p class="empty-state">No hay inventarios que coincidan con los filtros.</p>'
         : `<div class="table-scroll"><table class="inv-lista-table">
-        <thead><tr><th>Nombre</th><th>Estado</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th>${admin ? "<th></th>" : ""}</tr></thead>
+        <thead><tr><th>Folio</th><th>Usuario</th><th>Estado</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th>${admin ? "<th></th>" : ""}</tr></thead>
         <tbody>
           ${inventariosFiltrados.map((i) => {
             const estado = normalizarEstadoInventario(i);
             const btnAnular = admin && estado !== "anulado"
               ? `<button type="button" class="btn-link btn-inv-anular" data-id="${i.id}" title="Anular inventario">Anular</button>`
               : "";
-            return `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${i.nombre}</td><td>${htmlBadgeEstadoInventario(estado)}</td><td>${i.sucursal || ""}</td><td>${byId(state.bodegas, i.bodegaId)?.nombre || ""}</td><td>${i.fecha}</td><td>${i.detalles?.length || 0}</td>${admin ? `<td>${btnAnular}</td>` : ""}</tr>`;
+            return `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${escapeAttr(folioInventario(i))}</td><td>${escapeAttr(i.nombre || "")}</td><td>${htmlBadgeEstadoInventario(estado)}</td><td>${escapeAttr(i.sucursal || "")}</td><td>${escapeAttr(byId(state.bodegas, i.bodegaId)?.nombre || "")}</td><td>${escapeAttr(etiquetaFechaHoraInventario(i))}</td><td>${i.detalles?.length || 0}</td>${admin ? `<td>${btnAnular}</td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table></div>`}
@@ -2745,14 +2812,15 @@ function renderInventarios() {
     ${invVer ? `
     <div class="inv-modal-overlay" id="inv-modal-overlay">
       <div class="inv-modal card" role="dialog" aria-labelledby="inv-modal-titulo">
-        <h2 id="inv-modal-titulo">${invVer.nombre}</h2>
+        <h2 id="inv-modal-titulo">${escapeAttr(folioInventario(invVer))}</h2>
         <fieldset class="inv-modal-fieldset">
           <legend>Datos del Inventario</legend>
           <div class="inv-datos-grid">
-            <div><span class="inv-dato-label">Nombre</span><span class="inv-dato-valor">${invVer.nombre}</span></div>
-            <div><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${invVer.sucursal || byId(state.sucursales, invVer.sucursalId)?.nombre || "—"}</span></div>
-            <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${byId(state.bodegas, invVer.bodegaId)?.nombre || "—"}</span></div>
-            <div><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${invVer.fecha || ""}</span></div>
+            <div><span class="inv-dato-label">Folio</span><span class="inv-dato-valor">${escapeAttr(folioInventario(invVer))}</span></div>
+            <div><span class="inv-dato-label">Usuario</span><span class="inv-dato-valor">${escapeAttr(invVer.nombre || "")}</span></div>
+            <div><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${escapeAttr(invVer.sucursal || byId(state.sucursales, invVer.sucursalId)?.nombre || "—")}</span></div>
+            <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${escapeAttr(byId(state.bodegas, invVer.bodegaId)?.nombre || "—")}</span></div>
+            <div><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${escapeAttr(etiquetaFechaHoraInventario(invVer))}</span></div>
             <div><span class="inv-dato-label">Estado</span><span class="inv-dato-valor">${htmlBadgeEstadoInventario(normalizarEstadoInventario(invVer))}</span></div>
           </div>
         </fieldset>
