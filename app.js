@@ -382,6 +382,10 @@ function uid(prefix) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 9999)}`;
 }
 
+function byId(arr, id) {
+  return (arr || []).find((x) => x.id === id);
+}
+
 function monedaPorLocale(locale) {
   const lang = String(locale || "").toLowerCase();
   if (lang.startsWith("es-cl") || lang === "es") return "CLP";
