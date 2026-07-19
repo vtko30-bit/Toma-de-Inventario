@@ -2659,8 +2659,26 @@ function renderInventarios() {
   `;
 
   document.querySelectorAll(".row-inv").forEach((r) => r.addEventListener("click", () => {
-    editingIds.inventario = r.dataset.id;
+    const inv = byId(state.inventarios, r.dataset.id);
+    if (!inv) return;
+    const estado = normalizarEstadoInventario(inv);
+    editingIds.inventario = inv.id;
     editingIds.detalleInventario = null;
+    _invDetalleDraft = { productoId: "", cantidad: 0 };
+    _invCabeceraDraft = null;
+    _invProductoBusqueda = "";
+    _invTomaDraft = {};
+
+    // Borrador / no cerrado: ir directo a la toma de inventario
+    if (estado !== "cerrado" && estado !== "anulado") {
+      showVerInventario = false;
+      showCabeceraInventarioForm = true;
+      showDetalleInventarioForm = true;
+      renderInventarios();
+      return;
+    }
+
+    // Cerrado o anulado: solo vista de datos
     showCabeceraInventarioForm = false;
     showDetalleInventarioForm = false;
     showVerInventario = true;
