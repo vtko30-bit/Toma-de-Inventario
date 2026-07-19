@@ -599,6 +599,15 @@ th {
   width: 100%;
   max-width: 7rem;
   box-sizing: border-box;
+  text-align: right;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.inv-toma-cant::-webkit-outer-spin-button,
+.inv-toma-cant::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .inv-toma-actions {

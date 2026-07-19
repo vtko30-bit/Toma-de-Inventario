@@ -324,7 +324,9 @@ async function saveData() {
   if (window.SUPABASE_ENABLED) {
     if (_saving) {
       _saveQueued = true;
-      return false;
+      return new Promise((resolve) => {
+        _saveWaiters.push(resolve);
+      });
     }
     if (window.DataLayer.loadFailed) {
       toast(
@@ -344,6 +346,7 @@ async function saveData() {
       snapshot[c] = Array.isArray(state[c]) ? state[c].map((x) => ({ ...x })) : [];
     });
     const recetasSnap = state.recetas && typeof state.recetas === "object" ? JSON.parse(JSON.stringify(state.recetas)) : {};
+    let ok = false;
     try {
       await Promise.all(colecciones.map((c) => window.DataLayer.replaceCollection(tenantId, c, snapshot[c])));
       await window.DataLayer.saveRecetas(tenantId, recetasSnap);
@@ -352,7 +355,7 @@ async function saveData() {
         window.DataLayer._state[c] = snapshot[c];
       });
       window.DataLayer._state.recetas = recetasSnap;
-      return true;
+      ok = true;
     } catch (e) {
       console.error("Error guardando datos:", e);
       const msg = e.message || String(e);
@@ -363,15 +366,20 @@ async function saveData() {
         ayuda = " Revisa tu conexión e inténtalo de nuevo.";
       }
       toast("Error al guardar: " + msg + ayuda, "error", 7000);
-      return false;
+      ok = false;
     } finally {
       window.DataLayer._writeLock = false;
       _saving = false;
       if (_saveQueued) {
         _saveQueued = false;
-        setTimeout(() => saveData(), 50);
+        const waiters = _saveWaiters.splice(0);
+        saveData().then((queuedOk) => waiters.forEach((w) => w(queuedOk)));
+      } else if (_saveWaiters.length) {
+        const waiters = _saveWaiters.splice(0);
+        waiters.forEach((w) => w(ok));
       }
     }
+    return ok;
   } else {
     window.DataLayer._state = state;
     window.DataLayer._saveLocal(tenantId);
@@ -2342,7 +2350,7 @@ function renderInventarios() {
                       <td>${escapeAttr(p.nombre || "")}</td>
                       <td>${escapeAttr(p.unidad || "—")}</td>
                       <td class="inv-toma-stock">${f.stock}</td>
-                      <td><input type="number" class="inv-toma-cant" value="${f.cantidad}" min="0" max="999999" inputmode="numeric" /></td>
+                      <td><input type="text" class="inv-toma-cant" value="${f.cantidad}" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" /></td>
                     </tr>`;
                   }).join("")}
           </tbody>
