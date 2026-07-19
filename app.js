@@ -2418,6 +2418,19 @@ function renderInventarios() {
       }
 
       document.querySelectorAll(".inv-toma-cant").forEach((input) => {
+        const seleccionarTodo = () => {
+          requestAnimationFrame(() => {
+            try { input.select(); } catch (_) { /* ignore */ }
+          });
+        };
+        input.addEventListener("focus", seleccionarTodo);
+        input.addEventListener("mouseup", (e) => {
+          // Evita que el clic quite la selección hecha en focus
+          e.preventDefault();
+        });
+        input.addEventListener("keydown", (e) => {
+          if (["e", "E", "+", "-", ".", ","].includes(e.key)) e.preventDefault();
+        });
         input.addEventListener("input", () => {
           const digits = String(input.value).replace(/\D/g, "").slice(0, 6);
           if (String(input.value) !== digits) input.value = digits;
