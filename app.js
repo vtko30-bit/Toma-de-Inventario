@@ -253,6 +253,7 @@ function capturarCabeceraMovDesdeDom() {
 let _suppressNextSave = false;
 let _saving = false;
 let _saveQueued = false;
+let _saveWaiters = [];
 let _renderTimer = null;
 let _saveHintShown = false;
 
@@ -1272,71 +1273,95 @@ function renderRecetas() {
 
 function simpleCrudView(containerId, title, keyName, editingKey) {
   const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!Array.isArray(state[keyName])) state[keyName] = [];
   const list = state[keyName];
   const data = editingIds[editingKey] ? byId(list, editingIds[editingKey]) : {};
   const soloLectura = !puedeEditarCatalogos();
   const dis = soloLectura ? "disabled" : "";
+  const editando = !!editingIds[editingKey];
+  const singular = title.replace(/es$/, "").replace(/s$/, "") || title;
+
   el.innerHTML = `
     ${soloLectura ? '<div class="read-only-banner">Modo solo lectura: tu rol es <strong>usuario</strong>.</div>' : ""}
     <div class="card">
-      <h2>${title}</h2>
-      <div class="grid">
-        <label>Id<input id="${editingKey}-id" value="${data?.id || uid(title.slice(0, 3).toUpperCase())}" ${dis} /></label>
-        <label>Nombre<input id="${editingKey}-nombre" value="${data?.nombre || ""}" ${dis} /></label>
+      <div class="prod-lista-head">
+        <h2 style="margin:0;">${editando ? `Editar ${singular}` : `Crear ${singular}`}</h2>
+        ${editando ? `<button type="button" id="${editingKey}-nuevo" class="btn-link">Nueva</button>` : ""}
       </div>
-      <div class="actions">
-        <button id="${editingKey}-guardar" ${dis}>Guardar</button>
-        <button id="${editingKey}-editar" ${dis}>Editar</button>
-        <button id="${editingKey}-eliminar" ${dis}>Eliminar</button>
+      <div class="grid">
+        <input type="hidden" id="${editingKey}-id" value="${data?.id || uid(editingKey.slice(0, 3).toUpperCase())}" />
+        <label>Nombre<input id="${editingKey}-nombre" value="${data?.nombre || ""}" ${dis} placeholder="Nombre de la ${singular.toLowerCase()}" /></label>
+      </div>
+      <div class="actions prod-form-actions">
+        <button type="button" id="${editingKey}-guardar" ${dis}>Guardar</button>
+        ${editando ? `<button type="button" id="${editingKey}-eliminar" ${dis}>Eliminar</button>` : ""}
+        ${editando ? `<button type="button" id="${editingKey}-cancelar" class="btn-link">Cancelar</button>` : ""}
       </div>
     </div>
     <div class="card">
-      <table>
+      <h3 style="margin-top:0;">${title}</h3>
+      ${list.length === 0
+        ? `<p class="empty-state">Aún no hay ${title.toLowerCase()}. Escribe un nombre arriba y pulsa <strong>Guardar</strong>.</p>`
+        : `<div class="table-scroll"><table class="prod-lista-table">
         <thead><tr><th>Id</th><th>Nombre</th></tr></thead>
         <tbody>
-          ${list.map((x) => `<tr class="row-${editingKey}" data-id="${x.id}"><td>${x.id}</td><td>${x.nombre}</td></tr>`).join("")}
+          ${list.map((x) => `<tr class="row-${editingKey}" data-id="${x.id}" style="cursor:pointer;"><td>${x.id}</td><td>${x.nombre}</td></tr>`).join("")}
         </tbody>
-      </table>
+      </table></div>`}
     </div>
   `;
 
   document.querySelectorAll(`.row-${editingKey}`).forEach((r) => {
     r.addEventListener("click", () => {
+      if (soloLectura) return;
       editingIds[editingKey] = r.dataset.id;
       simpleCrudView(containerId, title, keyName, editingKey);
     });
   });
 
+  document.getElementById(`${editingKey}-nuevo`)?.addEventListener("click", () => {
+    editingIds[editingKey] = null;
+    simpleCrudView(containerId, title, keyName, editingKey);
+  });
+
+  document.getElementById(`${editingKey}-cancelar`)?.addEventListener("click", () => {
+    editingIds[editingKey] = null;
+    simpleCrudView(containerId, title, keyName, editingKey);
+  });
+
   document.getElementById(`${editingKey}-guardar`).addEventListener("click", async () => {
+    if (!Array.isArray(state[keyName])) state[keyName] = [];
     const item = {
       id: document.getElementById(`${editingKey}-id`).value.trim(),
       nombre: document.getElementById(`${editingKey}-nombre`).value.trim()
     };
-    if (!item.id || !item.nombre) { toast("Id y nombre son obligatorios", "warn"); return; }
-    const i = list.findIndex((x) => x.id === item.id);
+    if (!item.id || !item.nombre) { toast("El nombre es obligatorio", "warn"); return; }
+    const i = state[keyName].findIndex((x) => x.id === item.id);
     const editaba = i >= 0;
-    if (editaba) list[i] = item;
-    else list.push(item);
+    if (editaba) state[keyName][i] = item;
+    else state[keyName].push(item);
     editingIds[editingKey] = null;
     const ok = await saveData();
-    if (!ok) return;
-    toast(`${title.replace(/s$/, "")} ${editaba ? "actualizada" : "creada"}`, "success");
+    if (!ok) {
+      toast(`No se pudo guardar la ${singular.toLowerCase()}. Revisa el mensaje de error.`, "error", 6000);
+      return;
+    }
+    toast(`${singular} ${editaba ? "actualizada" : "creada"}`, "success");
     _suppressNextSave = true;
     render();
   });
 
-  document.getElementById(`${editingKey}-editar`).addEventListener("click", () => {
-    editingIds[editingKey] = document.getElementById(`${editingKey}-id`).value.trim();
-    simpleCrudView(containerId, title, keyName, editingKey);
-  });
-
-  document.getElementById(`${editingKey}-eliminar`).addEventListener("click", async () => {
+  document.getElementById(`${editingKey}-eliminar`)?.addEventListener("click", async () => {
     if (!confirmar(`¿Eliminar este registro?`)) return;
     const id = document.getElementById(`${editingKey}-id`).value.trim();
-    state[keyName] = state[keyName].filter((x) => x.id !== id);
+    state[keyName] = (state[keyName] || []).filter((x) => x.id !== id);
     editingIds[editingKey] = null;
     const ok = await saveData();
-    if (!ok) return;
+    if (!ok) {
+      toast("No se pudo eliminar. Revisa el mensaje de error.", "error", 6000);
+      return;
+    }
     toast("Eliminado", "success");
     _suppressNextSave = true;
     render();
