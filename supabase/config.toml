@@ -1,0 +1,2 @@
+[functions.enviar-inventario-excel]
+verify_jwt = true

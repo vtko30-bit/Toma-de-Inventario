@@ -29,6 +29,8 @@ let _invCabeceraDraft = null;
 let _invListaFilter = { fecha: "", bodegaId: "", estado: "activos" };
 let _invProductoBusqueda = "";
 let _invTomaDraft = {};
+let _invTomaVistaFiltro = "todos"; // todos | pendientes | revisados
+let _invCabeceraEditando = false;
 let _usuariosTenantNombres = [];
 let _usuariosTenantPromise = null;
 
@@ -187,13 +189,19 @@ function limpiarFormularioProductoInv() {
   editingIds.detalleInventario = null;
 }
 
+function nombreUsuarioSesion() {
+  const u = window.Auth?.currentUser;
+  return String(u?.nombre || u?.email || "").trim();
+}
+
 function capturarInvCabeceraDesdeDom() {
   return {
     id: document.getElementById("inv-id")?.value?.trim() || "",
     nombre: document.getElementById("inv-nombre")?.value?.trim() || "",
     sucursalId: document.getElementById("inv-sucursal")?.value || "",
     bodegaId: document.getElementById("inv-bodega")?.value || "",
-    fecha: document.getElementById("inv-fecha")?.value || new Date().toISOString().slice(0, 10)
+    fecha: document.getElementById("inv-fecha")?.value || new Date().toISOString().slice(0, 10),
+    observacion: document.getElementById("inv-observacion")?.value?.trim() || ""
   };
 }
 
@@ -203,10 +211,22 @@ function preservarBorradoresInventario() {
     if (nombre) _invProductoBusqueda = nombre;
     capturarInvTomaDraftDesdeDom();
   }
+  const obsEl = document.getElementById("inv-observacion");
+  if (obsEl && editingIds.inventario) {
+    const inv = byId(state.inventarios, editingIds.inventario);
+    if (inv) inv.observacion = obsEl.value.trim();
+  }
   const cabeceraFija = showDetalleInventarioForm && editingIds.inventario;
   if (showCabeceraInventarioForm && !cabeceraFija && document.getElementById("inv-nombre")) {
     _invCabeceraDraft = capturarInvCabeceraDesdeDom();
   }
+}
+
+function sincronizarObservacionInventarioDesdeDom() {
+  const obsEl = document.getElementById("inv-observacion");
+  if (!obsEl || !editingIds.inventario) return;
+  const inv = byId(state.inventarios, editingIds.inventario);
+  if (inv) inv.observacion = obsEl.value.trim();
 }
 
 function capturarInvTomaDraftDesdeDom() {
@@ -232,10 +252,11 @@ function confirmarCantidadFilaToma(row) {
   row.classList.add("inv-toma-locked");
   if (btn) btn.hidden = false;
   const check = row.querySelector(".inv-toma-check");
-  if (check && Number(input.value) > 0) check.checked = true;
+  if (check) check.checked = true;
   capturarInvTomaDraftDesdeDom();
   row.classList.remove("inv-toma-row-focus");
-  document.getElementById("det-prod-nombre")?.focus();
+  if (_invTomaVistaFiltro && _invTomaVistaFiltro !== "todos") aplicarFiltrosFilasToma();
+  else actualizarProgresoToma();
 }
 
 function editarCantidadFilaToma(row) {
@@ -250,6 +271,8 @@ function editarCantidadFilaToma(row) {
   input.focus({ preventScroll: true });
   try { input.select(); } catch (_) { /* ignore */ }
   capturarInvTomaDraftDesdeDom();
+  if (_invTomaVistaFiltro && _invTomaVistaFiltro !== "todos") aplicarFiltrosFilasToma();
+  else actualizarProgresoToma();
 }
 
 function busquedaOcultaFila(nombre, busqueda) {
@@ -258,20 +281,87 @@ function busquedaOcultaFila(nombre, busqueda) {
   return !String(nombre || "").toLowerCase().includes(q);
 }
 
-function filtrarFilasTomaPorBusqueda(texto) {
-  const q = String(texto || "").trim().toLowerCase();
-  _invProductoBusqueda = texto || "";
+function filaTomaOcultaPorVista(locked) {
+  const vista = _invTomaVistaFiltro || "todos";
+  if (vista === "pendientes") return !!locked;
+  if (vista === "revisados") return !locked;
+  return false;
+}
+
+function actualizarProgresoToma() {
+  const rows = [...document.querySelectorAll(".inv-toma-row")];
+  const total = rows.length;
+  const revisados = rows.filter((r) => r.classList.contains("inv-toma-locked")).length;
+  const pendientes = total - revisados;
+  const progreso = document.getElementById("inv-toma-progreso");
+  if (progreso) {
+    progreso.textContent = total === 0
+      ? "Sin productos"
+      : `Revisados ${revisados} de ${total}${pendientes > 0 ? ` · Faltan ${pendientes}` : ""}`;
+    progreso.classList.toggle("inv-toma-completo", total > 0 && pendientes === 0);
+  }
+  const btnGuardar = document.getElementById("det-guardar");
+  if (btnGuardar) {
+    btnGuardar.title = pendientes > 0
+      ? `Faltan ${pendientes} productos por confirmar`
+      : "Cerrar inventario (todos confirmados)";
+  }
+  syncInvCheckAll();
+}
+
+function syncInvCheckAll() {
+  const checkAll = document.getElementById("inv-check-all");
+  if (!checkAll) return;
+  const visibles = [...document.querySelectorAll(".inv-toma-row")].filter((r) => r.style.display !== "none");
+  const checks = visibles.map((r) => r.querySelector(".inv-toma-check")).filter(Boolean);
+  checkAll.checked = checks.length > 0 && checks.every((c) => c.checked);
+  checkAll.indeterminate = checks.some((c) => c.checked) && !checkAll.checked;
+}
+
+function aplicarFiltrosFilasToma() {
+  const q = String(_invProductoBusqueda || "").trim().toLowerCase();
   let visibles = 0;
   document.querySelectorAll(".inv-toma-row").forEach((row) => {
     const nombre = (row.dataset.prodNombre || "").toLowerCase();
-    const show = !q || nombre.includes(q);
+    const locked = row.classList.contains("inv-toma-locked");
+    const matchBusqueda = !q || nombre.includes(q);
+    const matchVista = !filaTomaOcultaPorVista(locked);
+    const show = matchBusqueda && matchVista;
     row.style.display = show ? "" : "none";
     if (show) visibles += 1;
   });
   const count = document.getElementById("inv-toma-count");
   const total = document.querySelectorAll(".inv-toma-row").length;
-  if (count) count.textContent = q ? `${visibles} de ${total} productos` : `${total} productos`;
+  if (count) {
+    count.textContent = q || _invTomaVistaFiltro !== "todos"
+      ? `${visibles} de ${total} visibles`
+      : `${total} productos`;
+  }
+  document.querySelectorAll("[data-inv-vista]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.invVista === _invTomaVistaFiltro);
+  });
+  actualizarProgresoToma();
   return visibles;
+}
+
+function filtrarFilasTomaPorBusqueda(texto) {
+  _invProductoBusqueda = texto || "";
+  return aplicarFiltrosFilasToma();
+}
+
+function confirmarSeleccionadasToma() {
+  const seleccionadas = [...document.querySelectorAll(".inv-toma-row")].filter((row) =>
+    row.style.display !== "none" && row.querySelector(".inv-toma-check")?.checked
+  );
+  if (!seleccionadas.length) {
+    toast("Selecciona al menos un producto para confirmar", "warn");
+    return 0;
+  }
+  seleccionadas.forEach((row) => confirmarCantidadFilaToma(row));
+  aplicarFiltrosFilasToma();
+  toast(`${seleccionadas.length} producto${seleccionadas.length === 1 ? "" : "s"} confirmado${seleccionadas.length === 1 ? "" : "s"}`, "success");
+  document.getElementById("det-prod-nombre")?.focus();
+  return seleccionadas.length;
 }
 
 function enfocarCantidadFilaToma(productoId) {
@@ -306,13 +396,13 @@ function filasTomaInventario(bodegaId, detalles) {
     const draft = _invTomaDraft[p.id];
     const stock = stockBaseProductoEnBodega(p.id, bodegaId);
     const cantidad = draft?.cantidad ?? det?.cantidad ?? 0;
-    const locked = draft?.locked ?? (det ? Number(det.cantidad) > 0 : false);
+    const locked = draft?.locked ?? !!det;
     return {
       producto: p,
       stock,
       cantidad,
       locked,
-      checked: draft?.checked ?? (det ? Number(det.cantidad) > 0 : false),
+      checked: draft?.checked ?? (locked || (det ? Number(det.cantidad) > 0 : false)),
       detalleId: det?.id || null
     };
   });
@@ -742,10 +832,19 @@ function iniciarNuevaTomaInventario() {
   showVerInventario = false;
   showCabeceraInventarioForm = true;
   showDetalleInventarioForm = false;
-  _invCabeceraDraft = null;
+  _invCabeceraDraft = {
+    id: uid("INV"),
+    nombre: nombreUsuarioSesion(),
+    sucursalId: "",
+    bodegaId: "",
+    fecha: new Date().toISOString().slice(0, 10),
+    observacion: ""
+  };
   _invDetalleDraft = { productoId: "", cantidad: 0 };
   _invProductoBusqueda = "";
   _invTomaDraft = {};
+  _invTomaVistaFiltro = "todos";
+  _invCabeceraEditando = true; // creación: campos editables
   navigateToView("inventarios");
   renderInventarios();
 }
@@ -840,7 +939,7 @@ function renderDashboard() {
         <div class="kpi-icon kpi-icon-alerta" aria-hidden="true"><i class="fa-solid fa-triangle-exclamation"></i></div>
         <div class="kpi-body">
           <div class="kpi-label">Stock bajo (≤5)</div>
-          <div class="kpi-value" style="color:${stockBajo > 0 ? "#b91c1c" : "#16a34a"}">${stockBajo}</div>
+          <div class="kpi-value" style="color:${stockBajo > 0 ? "#b91c1c" : "#0f766e"}">${stockBajo}</div>
         </div>
       </div>
       <div class="kpi-card">
@@ -923,7 +1022,7 @@ function renderDashboard() {
           labels: Object.keys(porCategoria),
           datasets: [{
             data: Object.values(porCategoria),
-            backgroundColor: ["#2563eb", "#16a34a", "#ca8a04", "#b91c1c", "#7c3aed", "#0891b2", "#db2777", "#ea580c"]
+            backgroundColor: ["#0f766e", "#0d9488", "#d97706", "#b91c1c", "#334155", "#14b8a6", "#64748b", "#f59e0b"]
           }]
         },
         options: { responsive: true, plugins: { legend: { position: "bottom" } } }
@@ -941,7 +1040,7 @@ function renderDashboard() {
             {
               label: "Ingreso",
               data: fechasOrdenadas.map((f) => movPorDia[f].ingreso),
-              backgroundColor: "#16a34a"
+              backgroundColor: "#0f766e"
             },
             {
               label: "Egreso",
@@ -2090,6 +2189,8 @@ function cancelarInventarioCreacion() {
   _invCabeceraDraft = null;
   _invProductoBusqueda = "";
   _invTomaDraft = {};
+  _invTomaVistaFiltro = "todos";
+  _invCabeceraEditando = false;
   renderInventarios();
 }
 
@@ -2142,8 +2243,8 @@ async function crearBodegaInventario(nombre, sucursalId) {
   return item;
 }
 
-function setupInvBodegaControls(cabeceraFija) {
-  if (cabeceraFija) return;
+function setupInvBodegaControls(camposBloqueados) {
+  if (camposBloqueados) return;
   const invSucSel = document.getElementById("inv-sucursal");
   const select = document.getElementById("inv-bodega");
   const bloqueCrear = document.getElementById("inv-bodega-crear");
@@ -2367,25 +2468,34 @@ function renderInventarios() {
   const productosParaInv = productosOrdenadosPorNombre(state.productos);
   const enModoCreacion = showCabeceraInventarioForm || showDetalleInventarioForm;
   const cabeceraFija = showDetalleInventarioForm && editingIds.inventario;
+  const nombreSesion = nombreUsuarioSesion();
   const cab = cabeceraFija
     ? {
         id: data?.id || "",
         folio: data?.folio || folioInventario(data),
-        nombre: data?.nombre || "",
+        nombre: data?.nombre || nombreSesion,
         sucursalId: data?.sucursalId || state.sucursales.find((s) => s.nombre === data?.sucursal)?.id || "",
         bodegaId: data?.bodegaId || "",
         fecha: data?.fecha || new Date().toISOString().slice(0, 10),
-        hora: horaInventario(data)
+        hora: horaInventario(data),
+        observacion: data?.observacion || ""
       }
-    : (_invCabeceraDraft || {
-        id: data?.id || uid("INV"),
-        folio: data?.folio || "",
-        nombre: data?.nombre || window.Auth?.currentUser?.nombre || window.Auth?.currentUser?.email || "",
-        sucursalId: data?.sucursalId || "",
-        bodegaId: data?.bodegaId || "",
-        fecha: data?.fecha || new Date().toISOString().slice(0, 10),
-        hora: data?.hora || ""
-      });
+    : (_invCabeceraDraft
+      ? {
+          ..._invCabeceraDraft,
+          nombre: _invCabeceraDraft.nombre || nombreSesion,
+          observacion: _invCabeceraDraft.observacion || ""
+        }
+      : {
+          id: data?.id || uid("INV"),
+          folio: data?.folio || "",
+          nombre: data?.nombre || nombreSesion,
+          sucursalId: data?.sucursalId || "",
+          bodegaId: data?.bodegaId || "",
+          fecha: data?.fecha || new Date().toISOString().slice(0, 10),
+          hora: data?.hora || "",
+          observacion: data?.observacion || ""
+        });
   const detalleEditando = editingIds.detalleInventario
     ? detalles.find((d) => d.id === editingIds.detalleInventario)
     : null;
@@ -2400,71 +2510,103 @@ function renderInventarios() {
   const filasToma = cabeceraFija
     ? filasTomaInventario(cab.bodegaId, inventarioActual?.detalles || [])
     : [];
+  const camposBloqueados = cabeceraFija && !_invCabeceraEditando;
+  const sucursalNombreCab = byId(state.sucursales, cab.sucursalId)?.nombre || data?.sucursal || "—";
+  const bodegaNombreCab = byId(state.bodegas, cab.bodegaId)?.nombre || "—";
 
   if (enModoCreacion) {
     el.innerHTML = `
-      <div class="card">
-        <fieldset style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-          <legend>Datos del Inventario</legend>
-          ${invSinSucursales && !cabeceraFija ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
-          <input type="hidden" id="inv-id" value="${cab.id}" />
-          ${cabeceraFija ? `<p class="inv-folio-badge">Folio <strong>${escapeAttr(cab.folio || "—")}</strong>${cab.hora ? ` · ${escapeAttr(cab.hora)}` : ""}</p>` : ""}
-          <div class="inv-cabecera-grid">
-            <div class="inv-cabecera-row">
-              <label class="inv-cab-fecha">Fecha<input type="date" id="inv-fecha" value="${cab.fecha}" ${cabeceraFija ? "disabled" : ""} /></label>
-              <label class="inv-cab-nombre">Usuario
-                <input id="inv-nombre" list="inv-usuarios-list" value="${escapeAttr(cab.nombre)}" ${cabeceraFija ? "disabled" : ""} autocomplete="off" placeholder="Selecciona o escribe el usuario" />
-                <datalist id="inv-usuarios-list">${htmlDatalistUsuariosInv()}</datalist>
-              </label>
-            </div>
-            <div class="inv-cabecera-row">
-              <label class="inv-cab-sucursal">Sucursal
-                <select id="inv-sucursal" ${cabeceraFija || invSinSucursales ? "disabled" : ""}>
-                  <option value="">--</option>
-                  ${state.sucursales.map((s) => `<option value="${s.id}" ${invSucursalIdActual === s.id ? "selected" : ""}>${s.nombre}</option>`).join("")}
-                </select>
-              </label>
-              <label class="inv-cab-bodega">Bodega
-                <div class="inv-bodega-field">
-                  <select id="inv-bodega" class="${invSinBodegasSucursal && !cabeceraFija ? "is-hidden" : ""}" ${cabeceraFija ? "disabled" : (invBodegasFiltradas.length ? "required" : "disabled")}>
-                    ${opcionesSelectBodegas(invBodegasFiltradas, cab.bodegaId)}
-                  </select>
-                  ${!cabeceraFija ? `
-                  <div id="inv-bodega-crear" class="inv-bodega-crear${invSinBodegasSucursal ? " is-visible" : ""}">
-                    <button type="button" id="inv-bodega-cancelar" class="btn-inv-bod-cancel is-hidden" title="Volver" aria-label="Volver al listado de bodegas">×</button>
-                    <input type="text" id="inv-bodega-nombre" placeholder="Nombre nueva bodega" autocomplete="off" />
-                    <button type="button" id="inv-bodega-agregar">Agregar</button>
-                  </div>` : ""}
-                </div>
-              </label>
-            </div>
+      <div class="card inv-datos-card">
+        <div class="inv-datos-head">
+          <div class="inv-datos-titulos">
+            <h3 class="inv-datos-titulo">Datos del inventario</h3>
+            ${cabeceraFija && cab.folio ? `<p class="inv-folio-bajo-titulo">Folio <strong>${escapeAttr(cab.folio)}</strong>${cab.hora ? ` · ${escapeAttr(cab.hora)}` : ""}</p>` : ""}
           </div>
-          ${showDetalleInventarioForm ? `
-          <div class="inv-prod-entry inv-prod-entry-buscar">
-            <label class="inv-prod-buscar">Buscar producto
-              <input type="search" id="det-prod-nombre" list="inv-productos-list" value="${escapeAttr(nombreProdForm)}" placeholder="Escribe o elige un producto para ir a su cantidad..." autocomplete="off" />
-              <datalist id="inv-productos-list">${htmlDatalistProductosInv(productosParaInv)}</datalist>
-            </label>
+          ${cabeceraFija && !camposBloqueados ? `
+          <div class="inv-datos-head-actions">
+            <button type="button" id="inv-guardar-cab" class="btn-guardar-cab">Guardar</button>
+            <button type="button" id="inv-cancelar-cab" class="btn-link">Cancelar</button>
           </div>` : ""}
-          ${!cabeceraFija ? `
-          <div class="actions inv-cabecera-actions">
-            <button type="button" id="inv-guardar">Crear</button>
-            <button type="button" id="inv-cancelar" class="btn-link">Cancelar</button>
-          </div>` : ""}
-        </fieldset>
+        </div>
+        ${invSinSucursales && !cabeceraFija ? '<p class="empty-state" style="margin:0 0 8px;">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
+        <input type="hidden" id="inv-id" value="${cab.id}" />
+        ${camposBloqueados ? `
+        <div class="inv-datos-resumen">
+          <div><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${escapeAttr(cab.fecha || "—")}</span></div>
+          <div><span class="inv-dato-label">Usuario</span><span class="inv-dato-valor">${escapeAttr(cab.nombre || "—")}</span></div>
+          <div><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${escapeAttr(sucursalNombreCab)}</span></div>
+          <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${escapeAttr(bodegaNombreCab)}</span></div>
+          <div class="inv-datos-resumen-accion">
+            <button type="button" id="inv-editar-cab" class="btn-editar-cab" title="Editar datos" aria-label="Editar datos del inventario">
+              <i class="fa-solid fa-pen" aria-hidden="true"></i>
+            </button>
+          </div>
+          ${cab.observacion ? `<div class="inv-dato-observacion"><span class="inv-dato-label">Observación</span><span class="inv-dato-valor">${escapeAttr(cab.observacion)}</span></div>` : ""}
+        </div>
+        ` : `
+        <div class="inv-cabecera-grid inv-cabecera-compacta">
+          <label class="inv-cab-fecha">Fecha<input type="date" id="inv-fecha" value="${cab.fecha}" /></label>
+          <label class="inv-cab-nombre">Usuario
+            <input id="inv-nombre" list="inv-usuarios-list" value="${escapeAttr(cab.nombre)}" autocomplete="off" placeholder="Usuario" />
+            <datalist id="inv-usuarios-list">${htmlDatalistUsuariosInv()}</datalist>
+          </label>
+          <label class="inv-cab-sucursal">Sucursal
+            <select id="inv-sucursal" ${invSinSucursales ? "disabled" : ""}>
+              <option value="">--</option>
+              ${state.sucursales.map((s) => `<option value="${s.id}" ${invSucursalIdActual === s.id ? "selected" : ""}>${s.nombre}</option>`).join("")}
+            </select>
+          </label>
+          <label class="inv-cab-bodega">Bodega
+            <div class="inv-bodega-field">
+              <select id="inv-bodega" class="${invSinBodegasSucursal ? "is-hidden" : ""}" ${invBodegasFiltradas.length ? "required" : "disabled"}>
+                ${opcionesSelectBodegas(invBodegasFiltradas, cab.bodegaId)}
+              </select>
+              <div id="inv-bodega-crear" class="inv-bodega-crear${invSinBodegasSucursal ? " is-visible" : ""}">
+                <button type="button" id="inv-bodega-cancelar" class="btn-inv-bod-cancel is-hidden" title="Volver" aria-label="Volver al listado de bodegas">×</button>
+                <input type="text" id="inv-bodega-nombre" placeholder="Nombre nueva bodega" autocomplete="off" />
+                <button type="button" id="inv-bodega-agregar">Agregar</button>
+              </div>
+            </div>
+          </label>
+        </div>
+        <label class="inv-cab-observacion">Observación
+          <textarea id="inv-observacion" rows="1" maxlength="500" placeholder="Opcional: notas, incidencias...">${escapeAttr(cab.observacion || "")}</textarea>
+        </label>
+        ${!cabeceraFija ? `
+        <div class="actions inv-cabecera-actions">
+          <button type="button" id="inv-guardar">Crear</button>
+          <button type="button" id="inv-cancelar" class="btn-link">Cancelar</button>
+        </div>` : ""}
+        `}
       </div>
 
       ${showDetalleInventarioForm ? `
       <div class="card">
-        <div class="inv-toma-head">
-          <h4 style="margin:0;">Productos de la bodega</h4>
-          <span class="small" id="inv-toma-count">${filasToma.length} productos</span>
+        <div class="inv-prod-buscar-row">
+          <label class="inv-prod-buscar">Buscar producto
+            <input type="search" id="det-prod-nombre" list="inv-productos-list" value="${escapeAttr(nombreProdForm)}" placeholder="Escribe o elige un producto para ir a su cantidad..." autocomplete="off" />
+            <datalist id="inv-productos-list">${htmlDatalistProductosInv(productosParaInv)}</datalist>
+          </label>
+          <span class="small" id="inv-toma-progreso">${(() => {
+            const rev = filasToma.filter((f) => f.locked).length;
+            const tot = filasToma.length;
+            const pend = tot - rev;
+            return tot === 0 ? "Sin productos" : `Revisados ${rev} de ${tot}${pend > 0 ? ` · Faltan ${pend}` : ""}`;
+          })()}</span>
+        </div>
+        <div class="inv-toma-toolbar">
+          <div class="inv-toma-vista-filtros" role="group" aria-label="Filtrar por revisión">
+            <button type="button" class="inv-vista-btn${_invTomaVistaFiltro === "todos" ? " active" : ""}" data-inv-vista="todos">Todos</button>
+            <button type="button" class="inv-vista-btn${_invTomaVistaFiltro === "pendientes" ? " active" : ""}" data-inv-vista="pendientes">Pendientes</button>
+            <button type="button" class="inv-vista-btn${_invTomaVistaFiltro === "revisados" ? " active" : ""}" data-inv-vista="revisados">Revisados</button>
+          </div>
+          <button type="button" id="inv-confirmar-sel" class="btn-confirmar-sel">Confirmar seleccionadas</button>
         </div>
         <div class="table-scroll">
         <table class="inv-toma-table">
           <thead>
             <tr>
-              <th class="inv-toma-check-col"><input type="checkbox" id="inv-check-all" title="Seleccionar todos" /></th>
+              <th class="inv-toma-check-col"><input type="checkbox" id="inv-check-all" title="Seleccionar visibles" /></th>
               <th>Nombre</th>
               <th>Uni. de Med.</th>
               <th>Stock</th>
@@ -2477,8 +2619,8 @@ function renderInventarios() {
               ? `<tr><td colspan="6" class="small">No hay productos en el catálogo. Crea productos primero.</td></tr>`
               : filasToma.map((f) => {
                     const p = f.producto;
-                    const oculta = busquedaOcultaFila(p.nombre, _invProductoBusqueda);
                     const locked = !!f.locked;
+                    const oculta = busquedaOcultaFila(p.nombre, _invProductoBusqueda) || filaTomaOcultaPorVista(locked);
                     return `<tr class="inv-toma-row${locked ? " inv-toma-locked" : ""}"${oculta ? ' style="display:none"' : ""} data-producto-id="${escapeAttr(p.id)}" data-stock="${f.stock}" data-prod-nombre="${escapeAttr(p.nombre || "")}">
                       <td class="inv-toma-check-col"><input type="checkbox" class="inv-toma-check" ${f.checked ? "checked" : ""} /></td>
                       <td>${escapeAttr(p.nombre || "")}</td>
@@ -2499,15 +2641,18 @@ function renderInventarios() {
         </div>
         <div class="actions inv-salir-wrap inv-toma-actions">
           <button type="button" id="det-actualizar">Actualizar</button>
-          <button type="button" id="det-guardar">Guardar</button>
+          <button type="button" id="det-guardar">Guardar / Cerrar</button>
           <button type="button" id="inv-salir">Salir</button>
         </div>
       </div>` : ""}
     `;
 
-    if (showCabeceraInventarioForm && !cabeceraFija) {
+    if (showCabeceraInventarioForm && !camposBloqueados) {
       asegurarUsuariosTenantEnFormInv();
-      setupInvBodegaControls(cabeceraFija);
+      setupInvBodegaControls(false);
+    }
+
+    if (showCabeceraInventarioForm && !cabeceraFija) {
       document.getElementById("inv-cancelar")?.addEventListener("click", () => {
         if (confirmar("¿Cancelar la creación del inventario? No se guardará.")) {
           cancelarInventarioCreacion();
@@ -2527,13 +2672,14 @@ function renderInventarios() {
         const item = {
           id: document.getElementById("inv-id").value.trim(),
           folio: prev?.folio || generarFolioInventario(fecha),
-          nombre: document.getElementById("inv-nombre").value.trim(),
+          nombre: document.getElementById("inv-nombre").value.trim() || nombreUsuarioSesion(),
           sucursalId,
           sucursal: sucursalNombre,
           bodegaId: document.getElementById("inv-bodega").value,
           fecha,
           hora: prev?.hora || horaActualInventario(),
           createdAt: prev?.createdAt || ahoraIso,
+          observacion: document.getElementById("inv-observacion")?.value?.trim() || "",
           detalles: data?.detalles || [],
           estado: prev?.estado === "cerrado" ? "cerrado" : "borrador"
         };
@@ -2546,6 +2692,7 @@ function renderInventarios() {
         editingIds.inventario = item.id;
         showDetalleInventarioForm = true;
         _invCabeceraDraft = null;
+        _invCabeceraEditando = false;
         const ok = await saveData();
         if (!ok) {
           toast("No se pudo guardar el inventario. Revisa el mensaje de error e inténtalo de nuevo.", "error", 6000);
@@ -2556,7 +2703,62 @@ function renderInventarios() {
       });
     }
 
+    if (cabeceraFija) {
+      document.getElementById("inv-editar-cab")?.addEventListener("click", () => {
+        capturarInvTomaDraftDesdeDom();
+        _invCabeceraEditando = true;
+        renderInventarios();
+      });
+      document.getElementById("inv-cancelar-cab")?.addEventListener("click", () => {
+        _invCabeceraEditando = false;
+        renderInventarios();
+      });
+      document.getElementById("inv-guardar-cab")?.addEventListener("click", async () => {
+        const inv = byId(state.inventarios, editingIds.inventario);
+        if (!inv) { toast("No hay un inventario activo", "warn"); return; }
+        if (inv.estado === "anulado") {
+          toast("Este inventario está anulado", "warn");
+          return;
+        }
+        const sucursalId = document.getElementById("inv-sucursal")?.value || "";
+        const bodegaId = document.getElementById("inv-bodega")?.value || "";
+        const nombre = document.getElementById("inv-nombre")?.value?.trim() || nombreUsuarioSesion();
+        const fecha = document.getElementById("inv-fecha")?.value || inv.fecha;
+        const observacion = document.getElementById("inv-observacion")?.value?.trim() || "";
+        if (!nombre) { toast("El usuario es obligatorio", "warn"); return; }
+        if (!sucursalId) { toast("Selecciona una sucursal", "warn"); return; }
+        if (!bodegaId) { toast("Selecciona o agrega una bodega", "warn"); return; }
+        const bodegaCambio = bodegaId !== inv.bodegaId;
+        if (bodegaCambio && (inv.detalles || []).length > 0) {
+          if (!confirmar("Cambiar la bodega puede invalidar el conteo ya registrado. ¿Continuar?")) return;
+        }
+        inv.nombre = nombre;
+        inv.sucursalId = sucursalId;
+        inv.sucursal = byId(state.sucursales, sucursalId)?.nombre || "";
+        inv.bodegaId = bodegaId;
+        inv.fecha = fecha;
+        inv.observacion = observacion;
+        capturarInvTomaDraftDesdeDom();
+        _invCabeceraEditando = false;
+        const ok = await saveData();
+        if (!ok) {
+          toast("No se pudo guardar los datos del inventario", "error");
+          _invCabeceraEditando = true;
+          return;
+        }
+        toast("Datos del inventario actualizados", "success");
+        renderInventarios();
+      });
+    }
+
     if (showDetalleInventarioForm) {
+      document.getElementById("inv-observacion")?.addEventListener("change", () => {
+        sincronizarObservacionInventarioDesdeDom();
+      });
+      document.getElementById("inv-observacion")?.addEventListener("blur", () => {
+        sincronizarObservacionInventarioDesdeDom();
+      });
+
       const buscarInput = document.getElementById("det-prod-nombre");
       if (buscarInput) {
         const alBuscar = () => {
@@ -2582,8 +2784,20 @@ function renderInventarios() {
             enfocarCantidadFilaToma(visibles[0].dataset.productoId);
           }
         });
-        if (_invProductoBusqueda) filtrarFilasTomaPorBusqueda(_invProductoBusqueda);
+        if (_invProductoBusqueda || _invTomaVistaFiltro !== "todos") aplicarFiltrosFilasToma();
+        else actualizarProgresoToma();
       }
+
+      document.querySelectorAll("[data-inv-vista]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          _invTomaVistaFiltro = btn.dataset.invVista || "todos";
+          aplicarFiltrosFilasToma();
+        });
+      });
+
+      document.getElementById("inv-confirmar-sel")?.addEventListener("click", () => {
+        confirmarSeleccionadasToma();
+      });
 
       document.querySelectorAll(".inv-toma-cant").forEach((input) => {
         const seleccionarTodo = () => {
@@ -2643,16 +2857,23 @@ function renderInventarios() {
       });
 
       document.querySelectorAll(".inv-toma-check").forEach((check) => {
-        check.addEventListener("change", () => capturarInvTomaDraftDesdeDom());
+        check.addEventListener("change", () => {
+          capturarInvTomaDraftDesdeDom();
+          syncInvCheckAll();
+        });
       });
 
       const checkAll = document.getElementById("inv-check-all");
       if (checkAll) {
-        const visibles = [...document.querySelectorAll(".inv-toma-row .inv-toma-check")];
-        checkAll.checked = visibles.length > 0 && visibles.every((c) => c.checked);
+        syncInvCheckAll();
         checkAll.addEventListener("change", () => {
-          visibles.forEach((c) => { c.checked = checkAll.checked; });
+          const visibles = [...document.querySelectorAll(".inv-toma-row")].filter((r) => r.style.display !== "none");
+          visibles.forEach((row) => {
+            const c = row.querySelector(".inv-toma-check");
+            if (c) c.checked = checkAll.checked;
+          });
           capturarInvTomaDraftDesdeDom();
+          syncInvCheckAll();
         });
       }
 
@@ -2664,6 +2885,7 @@ function renderInventarios() {
           return;
         }
         capturarInvTomaDraftDesdeDom();
+        sincronizarObservacionInventarioDesdeDom();
         const seleccionadas = [...document.querySelectorAll(".inv-toma-row")].filter((row) =>
           row.querySelector(".inv-toma-check")?.checked
         );
@@ -2671,6 +2893,9 @@ function renderInventarios() {
           toast("Selecciona al menos una línea para actualizar", "warn");
           return;
         }
+        seleccionadas.forEach((row) => {
+          if (!row.classList.contains("inv-toma-locked")) confirmarCantidadFilaToma(row);
+        });
         if (!inv.detalles) inv.detalles = [];
         let aplicados = 0;
         seleccionadas.forEach((row) => {
@@ -2702,7 +2927,7 @@ function renderInventarios() {
             nombreInv: inv.nombre
           });
           aplicados += 1;
-          _invTomaDraft[productoId] = { checked: true, cantidad };
+          _invTomaDraft[productoId] = { checked: true, cantidad, locked: true };
         });
         if (inv.estado !== "cerrado") inv.estado = "borrador";
         await saveData();
@@ -2718,14 +2943,29 @@ function renderInventarios() {
           return;
         }
         capturarInvTomaDraftDesdeDom();
+        sincronizarObservacionInventarioDesdeDom();
+        const filas = [...document.querySelectorAll(".inv-toma-row")];
+        const pendientes = filas.filter((row) => !row.classList.contains("inv-toma-locked"));
+        if (pendientes.length) {
+          _invTomaVistaFiltro = "pendientes";
+          aplicarFiltrosFilasToma();
+          toast(
+            `Faltan ${pendientes.length} productos por confirmar. Selecciónalos y pulsa "Confirmar seleccionadas", o confírmalos uno a uno.`,
+            "warn",
+            7000
+          );
+          return;
+        }
+        if (!filas.length) {
+          toast("No hay productos para guardar", "warn");
+          return;
+        }
         if (!inv.detalles) inv.detalles = [];
-        document.querySelectorAll(".inv-toma-row").forEach((row) => {
-          const checked = row.querySelector(".inv-toma-check")?.checked;
-          const cantidad = Number(row.querySelector(".inv-toma-cant")?.value || 0);
-          if (!checked && !(cantidad > 0)) return;
+        filas.forEach((row) => {
           const productoId = row.dataset.productoId;
           const prod = byId(state.productos, productoId);
           if (!prod) return;
+          const cantidad = Number(row.querySelector(".inv-toma-cant")?.value || 0);
           const idx = inv.detalles.findIndex((d) => d.productoId === productoId);
           const itemDet = {
             id: idx >= 0 ? inv.detalles[idx].id : uid("DET"),
@@ -2737,12 +2977,13 @@ function renderInventarios() {
           if (idx >= 0) inv.detalles[idx] = { ...inv.detalles[idx], ...itemDet };
           else inv.detalles.push(itemDet);
         });
-        if (!(inv.detalles || []).length) {
-          toast("Marca o ingresa cantidad en al menos un producto antes de guardar", "warn");
+        inv.estado = "cerrado";
+        const okCierre = await saveData();
+        if (!okCierre) {
+          toast("No se pudo guardar el cierre del inventario", "error");
           return;
         }
-        inv.estado = "cerrado";
-        await saveData();
+        const invCerrado = { ...inv };
         showCabeceraInventarioForm = false;
         showDetalleInventarioForm = false;
         showVerInventario = false;
@@ -2751,14 +2992,21 @@ function renderInventarios() {
         _invCabeceraDraft = null;
         _invProductoBusqueda = "";
         _invTomaDraft = {};
-        toast("Inventario cerrado y guardado", "success");
+        _invTomaVistaFiltro = "todos";
+        _invCabeceraEditando = false;
+        try {
+          await notificarInventarioCerradoAAdmins(invCerrado);
+        } catch (e) {
+          console.warn(e);
+          toast("Inventario cerrado. Hubo un problema al preparar el Excel para administradores.", "warn", 6000);
+        }
         render();
       });
 
       document.getElementById("inv-salir")?.addEventListener("click", () => {
         capturarInvTomaDraftDesdeDom();
-        const hayPendiente = Object.values(_invTomaDraft).some((d) => d.checked || Number(d.cantidad) > 0);
-        if (hayPendiente && !confirmar("Hay cantidades o selecciones sin guardar. ¿Salir de todos modos?")) return;
+        const hayPendiente = Object.values(_invTomaDraft).some((d) => d.checked || d.locked || Number(d.cantidad) > 0);
+        if (hayPendiente && !confirmar("Hay cantidades o confirmaciones sin cerrar el inventario. ¿Salir de todos modos?")) return;
         showCabeceraInventarioForm = false;
         showDetalleInventarioForm = false;
         showVerInventario = false;
@@ -2767,6 +3015,8 @@ function renderInventarios() {
         _invCabeceraDraft = null;
         _invProductoBusqueda = "";
         _invTomaDraft = {};
+        _invTomaVistaFiltro = "todos";
+        _invCabeceraEditando = false;
         renderInventarios();
       });
     }
@@ -2782,10 +3032,9 @@ function renderInventarios() {
   el.innerHTML = `
     <div class="inv-vista-head">
       <h2 class="inv-vista-titulo">Toma de Inventario</h2>
-      <button type="button" id="btn-nuevo-inventario" class="btn-nuevo-inventario">Nuevo inventario</button>
     </div>
     <div class="card">
-      <h3>Filtros</h3>
+      <h3 style="margin:0 0 12px;">Filtros</h3>
       <div class="grid inv-lista-filtros">
         <label>Fecha<input type="date" id="f-fecha" value="${_invListaFilter.fecha}" /></label>
         <label>Bodega
@@ -2805,6 +3054,9 @@ function renderInventarios() {
             <option value="todos" ${_invListaFilter.estado === "todos" ? "selected" : ""}>Todos</option>
           </select>
         </label>
+        <div class="inv-filtros-accion">
+          <button type="button" id="btn-nuevo-inventario" class="btn-nuevo-inventario">Nuevo inventario</button>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -2839,6 +3091,9 @@ function renderInventarios() {
             <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${escapeAttr(byId(state.bodegas, invVer.bodegaId)?.nombre || "—")}</span></div>
             <div><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${escapeAttr(etiquetaFechaHoraInventario(invVer))}</span></div>
             <div><span class="inv-dato-label">Estado</span><span class="inv-dato-valor">${htmlBadgeEstadoInventario(normalizarEstadoInventario(invVer))}</span></div>
+            ${invVer.observacion
+              ? `<div class="inv-dato-observacion"><span class="inv-dato-label">Observación</span><span class="inv-dato-valor">${escapeAttr(invVer.observacion)}</span></div>`
+              : ""}
           </div>
         </fieldset>
         <h4 style="margin-top:16px;">Movimientos ingresados</h4>
@@ -2868,6 +3123,8 @@ function renderInventarios() {
     </div>` : ""}
   `;
 
+  document.getElementById("btn-nuevo-inventario")?.addEventListener("click", iniciarNuevaTomaInventario);
+
   document.querySelectorAll(".row-inv").forEach((r) => r.addEventListener("click", () => {
     const inv = byId(state.inventarios, r.dataset.id);
     if (!inv) return;
@@ -2878,6 +3135,8 @@ function renderInventarios() {
     _invCabeceraDraft = null;
     _invProductoBusqueda = "";
     _invTomaDraft = {};
+    _invTomaVistaFiltro = "todos";
+    _invCabeceraEditando = false;
 
     // Borrador / no cerrado: ir directo a la toma de inventario
     if (estado !== "cerrado" && estado !== "anulado") {
@@ -2931,6 +3190,7 @@ function renderInventarios() {
     showCabeceraInventarioForm = true;
     showDetalleInventarioForm = true;
     editingIds.detalleInventario = null;
+    _invCabeceraEditando = false;
     renderInventarios();
   });
 
@@ -2947,6 +3207,169 @@ function renderInventarios() {
       renderInventarios();
     }
   });
+}
+
+function nombreArchivoExcelInventario(inv) {
+  const folio = String(folioInventario(inv) || inv?.id || "inventario").replace(/[^\w.-]+/g, "_");
+  return `${folio}.xlsx`;
+}
+
+function construirWorkbookInventario(inv) {
+  if (!window.XLSX) throw new Error("Librería Excel no disponible");
+  const bodega = byId(state.bodegas, inv.bodegaId)?.nombre || "";
+  const sucursal = inv.sucursal || byId(state.sucursales, inv.sucursalId)?.nombre || "";
+  const detalles = detallesInventarioOrdenados(inv.detalles || []);
+  const filasDetalle = detalles.map((d) => {
+    const prod = byId(state.productos, d.productoId);
+    const stockRef = Number(d.stockReferencia ?? 0);
+    const cantidad = Number(d.cantidad ?? 0);
+    return {
+      Producto: prod?.nombre || d.productoId,
+      Unidad: d.unidad || prod?.unidad || "",
+      "Stock referencia": stockRef,
+      Cantidad: cantidad,
+      Diferencia: cantidad - stockRef
+    };
+  });
+  const resumen = [{
+    Folio: folioInventario(inv),
+    Usuario: inv.nombre || "",
+    Fecha: inv.fecha || "",
+    Hora: horaInventario(inv) || "",
+    Sucursal: sucursal,
+    Bodega: bodega,
+    Estado: etiquetaEstadoInventario(normalizarEstadoInventario(inv)),
+    Observación: inv.observacion || "",
+    Items: detalles.length,
+    "Total cantidad": detalles.reduce((s, d) => s + Number(d.cantidad || 0), 0)
+  }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), "Resumen");
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet(filasDetalle.length ? filasDetalle : [{ Producto: "(sin productos)", Unidad: "", "Stock referencia": "", Cantidad: "", Diferencia: "" }]),
+    "Detalle"
+  );
+  return wb;
+}
+
+function descargarExcelInventario(inv) {
+  const wb = construirWorkbookInventario(inv);
+  const fileName = nombreArchivoExcelInventario(inv);
+  XLSX.writeFile(wb, fileName);
+  return fileName;
+}
+
+function excelInventarioABase64(inv) {
+  const wb = construirWorkbookInventario(inv);
+  return XLSX.write(wb, { bookType: "xlsx", type: "base64" });
+}
+
+async function obtenerEmailsAdministradores() {
+  const tenantId = getTenantId();
+  const emails = new Set();
+  if (window.SUPABASE_ENABLED) {
+    const { supabase } = window.__SB__ || {};
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("usuarios")
+        .select("email,role")
+        .eq("tenant_id", tenantId)
+        .eq("role", "admin");
+      if (error) throw error;
+      (data || []).forEach((u) => {
+        const email = String(u.email || "").trim();
+        if (email) emails.add(email.toLowerCase());
+      });
+    }
+  } else {
+    const users = JSON.parse(localStorage.getItem("inventario_app_users_v1") || "[]");
+    users
+      .filter((u) => u.tenantId === tenantId && String(u.role || "").toLowerCase() === "admin")
+      .forEach((u) => {
+        const email = String(u.email || "").trim();
+        if (email) emails.add(email.toLowerCase());
+      });
+  }
+  const propio = String(window.Auth?.currentUser?.email || "").trim().toLowerCase();
+  if (propio && window.Auth?.isAdmin?.()) emails.add(propio);
+  return [...emails];
+}
+
+async function notificarInventarioCerradoAAdmins(inv) {
+  let fileName = nombreArchivoExcelInventario(inv);
+  let emails = [];
+  try {
+    emails = await obtenerEmailsAdministradores();
+  } catch (e) {
+    console.warn("No se pudieron obtener administradores:", e);
+  }
+
+  let enviado = false;
+  if (window.SUPABASE_ENABLED && emails.length) {
+    try {
+      const { supabase } = window.__SB__ || {};
+      if (!supabase?.functions?.invoke) throw new Error("Supabase Functions no disponible");
+      const fileBase64 = excelInventarioABase64(inv);
+      const { data, error } = await supabase.functions.invoke("enviar-inventario-excel", {
+        body: {
+          to: emails,
+          folio: folioInventario(inv),
+          fileName,
+          fileBase64,
+          meta: {
+            usuario: inv.nombre || "",
+            fecha: inv.fecha || "",
+            hora: horaInventario(inv) || "",
+            sucursal: inv.sucursal || byId(state.sucursales, inv.sucursalId)?.nombre || "",
+            bodega: byId(state.bodegas, inv.bodegaId)?.nombre || "",
+            observacion: inv.observacion || "",
+            items: (inv.detalles || []).length
+          }
+        }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      enviado = true;
+      const n = data?.sentTo?.length || emails.length;
+      toast(`Inventario cerrado. Excel enviado a ${n} administrador${n === 1 ? "" : "es"}.`, "success", 6000);
+    } catch (e) {
+      console.warn("Envío de Excel a admins falló:", e);
+    }
+  }
+
+  if (!enviado) {
+    try {
+      fileName = descargarExcelInventario(inv);
+    } catch (e) {
+      console.warn("No se pudo descargar el Excel:", e);
+      toast("Inventario cerrado, pero no se pudo generar el Excel", "warn", 6000);
+      return;
+    }
+    if (emails.length) {
+      const asunto = encodeURIComponent(`Inventario cerrado ${folioInventario(inv)}`);
+      const cuerpo = encodeURIComponent(
+        `Se cerró el inventario ${folioInventario(inv)}.\n` +
+        `Usuario: ${inv.nombre || ""}\n` +
+        `Fecha: ${inv.fecha || ""} ${horaInventario(inv) || ""}\n` +
+        `Sucursal: ${inv.sucursal || ""}\n` +
+        `Bodega: ${byId(state.bodegas, inv.bodegaId)?.nombre || ""}\n` +
+        `Items: ${(inv.detalles || []).length}\n\n` +
+        `Adjunta el archivo descargado: ${fileName}\n` +
+        `(Para envío automático sin adjuntar a mano, configura la Edge Function — ver README.)`
+      );
+      try {
+        window.location.href = `mailto:${emails.join(",")}?subject=${asunto}&body=${cuerpo}`;
+      } catch (_) { /* ignore */ }
+      toast(
+        `Inventario cerrado. Se descargó ${fileName}. Completa el correo a los administradores adjuntando el Excel.`,
+        "warn",
+        8000
+      );
+    } else {
+      toast(`Inventario cerrado. Se descargó ${fileName}. No hay administradores con correo para notificar.`, "warn", 7000);
+    }
+  }
 }
 
 function setupExport() {
@@ -2997,14 +3420,7 @@ function downloadFile(fileName, mimeType, content) {
 }
 
 function setupNuevoInventarioTop() {
-  document.getElementById("btnNuevoInventarioTop").addEventListener("click", () => {
-    editingIds.inventario = null;
-    editingIds.detalleInventario = null;
-    showVerInventario = false;
-    showCabeceraInventarioForm = true;
-    showDetalleInventarioForm = false;
-    renderInventarios();
-  });
+  // Compatibilidad: el botón ahora se enlaza en renderInventarios().
 }
 
 function setupServiceWorker() {

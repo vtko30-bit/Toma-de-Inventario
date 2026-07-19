@@ -22,6 +22,9 @@ inventario-app/
 ├── app.js                   # Lógica principal de UI
 ├── auth.js                  # Autenticación (Supabase o local)
 ├── data.js                  # Capa de datos (Supabase o localStorage)
+├── supabase/
+│   ├── config.toml
+│   └── functions/enviar-inventario-excel/  # Email Excel a admins (Resend)
 ├── supabase-config.js       # URL + anonKey (placeholders por defecto)
 ├── supabase-schema.sql      # Schema y políticas RLS
 ├── manifest.json            # Manifiesto PWA
@@ -105,6 +108,38 @@ git push -u origin main
 - Para sumar usuarios a la misma empresa, deben registrarse usando exactamente el **mismo nombre de empresa**.
 - Desde la sección **Usuarios** (visible solo para admins), puedes cambiar el rol de los demás integrantes.
 - Las políticas RLS de Supabase garantizan que un tenant nunca pueda leer/modificar datos de otro.
+
+## Envío Excel a administradores (al cerrar inventario)
+
+Al pulsar **Guardar / Cerrar** en una toma, la app genera un Excel (hojas Resumen + Detalle) y lo envía a todos los usuarios con rol `admin` del mismo tenant.
+
+### Comportamiento
+
+1. **Con Edge Function configurada (recomendado):** el Excel se envía por correo automáticamente (Resend).
+2. **Sin configurarla aún:** se **descarga** el Excel en el dispositivo y se abre el cliente de correo con los admins en copia para adjuntar el archivo a mano.
+
+### Configurar envío automático (Supabase + Resend)
+
+1. Crea una cuenta gratuita en [resend.com](https://resend.com) y genera una API key.
+2. Instala la CLI de Supabase y enlaza el proyecto:
+   ```bash
+   npm i -g supabase
+   supabase login
+   supabase link --project-ref vwoqjbyyxcrbcqrjiksk
+   ```
+3. Define los secrets:
+   ```bash
+   supabase secrets set RESEND_API_KEY=re_xxxxxxxx
+   supabase secrets set RESEND_FROM="Inventario <onboarding@resend.dev>"
+   ```
+   > En producción, verifica tu dominio en Resend y usa un `from` de ese dominio.
+4. Despliega la función:
+   ```bash
+   supabase functions deploy enviar-inventario-excel
+   ```
+5. Cierra un inventario de prueba: los admins deben recibir el Excel adjunto.
+
+El código de la función está en `supabase/functions/enviar-inventario-excel/`.
 
 ## Variables de entorno (opcional)
 
