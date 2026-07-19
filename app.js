@@ -157,9 +157,42 @@ function capturarInvTomaDraftDesdeDom() {
     const productoId = row.dataset.productoId;
     if (!productoId) return;
     const checked = !!row.querySelector(".inv-toma-check")?.checked;
-    const cantidad = Number(row.querySelector(".inv-toma-cant")?.value || 0);
-    _invTomaDraft[productoId] = { checked, cantidad };
+    const input = row.querySelector(".inv-toma-cant");
+    const cantidad = Number(input?.value || 0);
+    const locked = !!input?.readOnly || row.classList.contains("inv-toma-locked");
+    _invTomaDraft[productoId] = { checked, cantidad, locked };
   });
+}
+
+function confirmarCantidadFilaToma(row) {
+  if (!row) return;
+  const input = row.querySelector(".inv-toma-cant");
+  const btn = row.querySelector(".inv-toma-editar");
+  if (!input) return;
+  const digits = String(input.value).replace(/\D/g, "").slice(0, 6);
+  input.value = digits === "" ? "0" : digits;
+  input.readOnly = true;
+  row.classList.add("inv-toma-locked");
+  if (btn) btn.hidden = false;
+  const check = row.querySelector(".inv-toma-check");
+  if (check && Number(input.value) > 0) check.checked = true;
+  capturarInvTomaDraftDesdeDom();
+  row.classList.remove("inv-toma-row-focus");
+  document.getElementById("det-prod-nombre")?.focus();
+}
+
+function editarCantidadFilaToma(row) {
+  if (!row) return;
+  const input = row.querySelector(".inv-toma-cant");
+  const btn = row.querySelector(".inv-toma-editar");
+  if (!input) return;
+  input.readOnly = false;
+  input.dataset.dirty = "0";
+  row.classList.remove("inv-toma-locked");
+  if (btn) btn.hidden = true;
+  input.focus({ preventScroll: true });
+  try { input.select(); } catch (_) { /* ignore */ }
+  capturarInvTomaDraftDesdeDom();
 }
 
 function busquedaOcultaFila(nombre, busqueda) {
@@ -189,13 +222,9 @@ function enfocarCantidadFilaToma(productoId) {
   const row = [...document.querySelectorAll(".inv-toma-row")].find((r) => r.dataset.productoId === productoId);
   if (!row) return false;
   row.style.display = "";
+  editarCantidadFilaToma(row);
   row.classList.add("inv-toma-row-focus");
   row.scrollIntoView({ behavior: "smooth", block: "center" });
-  const cant = row.querySelector(".inv-toma-cant");
-  if (cant) {
-    cant.focus({ preventScroll: true });
-    try { cant.select(); } catch (_) { /* ignore */ }
-  }
   setTimeout(() => row.classList.remove("inv-toma-row-focus"), 1400);
   return true;
 }
@@ -219,10 +248,13 @@ function filasTomaInventario(bodegaId, detalles) {
     const det = porProducto[p.id];
     const draft = _invTomaDraft[p.id];
     const stock = stockBaseProductoEnBodega(p.id, bodegaId);
+    const cantidad = draft?.cantidad ?? det?.cantidad ?? 0;
+    const locked = draft?.locked ?? (det ? Number(det.cantidad) > 0 : false);
     return {
       producto: p,
       stock,
-      cantidad: draft?.cantidad ?? det?.cantidad ?? 0,
+      cantidad,
+      locked,
       checked: draft?.checked ?? (det ? Number(det.cantidad) > 0 : false),
       detalleId: det?.id || null
     };
@@ -2364,20 +2396,29 @@ function renderInventarios() {
               <th>Uni. de Med.</th>
               <th>Stock</th>
               <th>Cantidad</th>
+              <th class="inv-toma-edit-col"></th>
             </tr>
           </thead>
           <tbody>
             ${filasToma.length === 0
-              ? `<tr><td colspan="5" class="small">No hay productos en el catálogo. Crea productos primero.</td></tr>`
+              ? `<tr><td colspan="6" class="small">No hay productos en el catálogo. Crea productos primero.</td></tr>`
               : filasToma.map((f) => {
                     const p = f.producto;
                     const oculta = busquedaOcultaFila(p.nombre, _invProductoBusqueda);
-                    return `<tr class="inv-toma-row"${oculta ? ' style="display:none"' : ""} data-producto-id="${escapeAttr(p.id)}" data-stock="${f.stock}" data-prod-nombre="${escapeAttr(p.nombre || "")}">
+                    const locked = !!f.locked;
+                    return `<tr class="inv-toma-row${locked ? " inv-toma-locked" : ""}"${oculta ? ' style="display:none"' : ""} data-producto-id="${escapeAttr(p.id)}" data-stock="${f.stock}" data-prod-nombre="${escapeAttr(p.nombre || "")}">
                       <td class="inv-toma-check-col"><input type="checkbox" class="inv-toma-check" ${f.checked ? "checked" : ""} /></td>
                       <td>${escapeAttr(p.nombre || "")}</td>
                       <td>${escapeAttr(p.unidad || "—")}</td>
                       <td class="inv-toma-stock">${f.stock}</td>
-                      <td><input type="text" class="inv-toma-cant" value="${f.cantidad}" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" /></td>
+                      <td>
+                        <input type="text" class="inv-toma-cant" value="${f.cantidad}" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" ${locked ? "readonly" : ""} />
+                      </td>
+                      <td class="inv-toma-edit-col">
+                        <button type="button" class="btn-icon inv-toma-editar" title="Editar cantidad" aria-label="Editar cantidad" ${locked ? "" : "hidden"}>
+                          <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                        </button>
+                      </td>
                     </tr>`;
                   }).join("")}
           </tbody>
@@ -2440,31 +2481,86 @@ function renderInventarios() {
     if (showDetalleInventarioForm) {
       const buscarInput = document.getElementById("det-prod-nombre");
       if (buscarInput) {
-        buscarInput.addEventListener("input", () => filtrarFilasTomaPorBusqueda(buscarInput.value));
+        const alBuscar = () => {
+          const texto = buscarInput.value;
+          filtrarFilasTomaPorBusqueda(texto);
+          const idExacto = resolverProductoIdPorNombre(texto);
+          const prod = idExacto ? byId(state.productos, idExacto) : null;
+          // Salto solo con coincidencia exacta (p. ej. elegir del datalist)
+          if (prod && String(texto).trim().toLowerCase() === String(prod.nombre || "").trim().toLowerCase()) {
+            saltarACantidadDesdeBusqueda(texto);
+          }
+        };
+        buscarInput.addEventListener("input", alBuscar);
+        buscarInput.addEventListener("change", alBuscar);
+        buscarInput.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          if (saltarACantidadDesdeBusqueda(buscarInput.value)) return;
+          const visibles = [...document.querySelectorAll(".inv-toma-row")].filter((r) => r.style.display !== "none");
+          if (visibles.length === 1) {
+            buscarInput.value = "";
+            filtrarFilasTomaPorBusqueda("");
+            enfocarCantidadFilaToma(visibles[0].dataset.productoId);
+          }
+        });
         if (_invProductoBusqueda) filtrarFilasTomaPorBusqueda(_invProductoBusqueda);
       }
 
       document.querySelectorAll(".inv-toma-cant").forEach((input) => {
         const seleccionarTodo = () => {
+          if (input.readOnly) return;
           requestAnimationFrame(() => {
             try { input.select(); } catch (_) { /* ignore */ }
           });
         };
         input.addEventListener("focus", seleccionarTodo);
         input.addEventListener("mouseup", (e) => {
-          // Evita que el clic quite la selección hecha en focus
+          if (input.readOnly) return;
           e.preventDefault();
         });
         input.addEventListener("keydown", (e) => {
+          if (input.readOnly) {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              editarCantidadFilaToma(input.closest(".inv-toma-row"));
+            }
+            return;
+          }
           if (["e", "E", "+", "-", ".", ","].includes(e.key)) e.preventDefault();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            confirmarCantidadFilaToma(input.closest(".inv-toma-row"));
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            confirmarCantidadFilaToma(input.closest(".inv-toma-row"));
+          }
+        });
+        input.addEventListener("blur", () => {
+          if (input.readOnly) return;
+          // Solo bloquea si hay cantidad o si el usuario escribió algo
+          if (Number(input.value) > 0 || input.dataset.dirty === "1") {
+            confirmarCantidadFilaToma(input.closest(".inv-toma-row"));
+          }
         });
         input.addEventListener("input", () => {
+          if (input.readOnly) return;
+          input.dataset.dirty = "1";
           const digits = String(input.value).replace(/\D/g, "").slice(0, 6);
           if (String(input.value) !== digits) input.value = digits;
           const row = input.closest(".inv-toma-row");
           const check = row?.querySelector(".inv-toma-check");
           if (check && Number(input.value) > 0) check.checked = true;
           capturarInvTomaDraftDesdeDom();
+        });
+      });
+
+      document.querySelectorAll(".inv-toma-editar").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          editarCantidadFilaToma(btn.closest(".inv-toma-row"));
         });
       });
 

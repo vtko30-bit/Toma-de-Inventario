@@ -610,6 +610,30 @@ th {
   margin: 0;
 }
 
+.inv-toma-cant[readonly] {
+  background: #f3f4f6;
+  color: #111827;
+  font-weight: 600;
+  cursor: default;
+  border-color: #e5e7eb;
+}
+
+.inv-toma-edit-col {
+  width: 2.75rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.inv-toma-editar {
+  color: #0f766e;
+}
+
+.inv-toma-editar:hover {
+  background: #ccfbf1;
+  color: #0f766e;
+  opacity: 1;
+}
+
 .inv-toma-row-focus {
   background: #ecfdf5 !important;
   outline: 2px solid #14b8a6;
@@ -618,6 +642,10 @@ th {
 
 .inv-toma-row-focus td {
   background: transparent;
+}
+
+.inv-toma-locked td {
+  background: #fafafa;
 }
 
 .inv-toma-actions {
