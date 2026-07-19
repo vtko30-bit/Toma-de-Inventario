@@ -733,10 +733,21 @@ function render() {
 }
 
 function actualizarBotonNuevoInventario() {
-  const btn = document.getElementById("btnNuevoInventarioTop");
-  if (!btn) return;
-  const activa = document.querySelector(".nav-btn.active")?.dataset.view;
-  btn.style.display = activa === "inventarios" ? "" : "none";
+  // El botón vive dentro de la vista Toma de Inventario (ya no en la topbar).
+}
+
+function iniciarNuevaTomaInventario() {
+  editingIds.inventario = null;
+  editingIds.detalleInventario = null;
+  showVerInventario = false;
+  showCabeceraInventarioForm = true;
+  showDetalleInventarioForm = false;
+  _invCabeceraDraft = null;
+  _invDetalleDraft = { productoId: "", cantidad: 0 };
+  _invProductoBusqueda = "";
+  _invTomaDraft = {};
+  navigateToView("inventarios");
+  renderInventarios();
 }
 
 function closeMobileNav() {
@@ -2769,6 +2780,10 @@ function renderInventarios() {
   const admin = esAdmin();
 
   el.innerHTML = `
+    <div class="inv-vista-head">
+      <h2 class="inv-vista-titulo">Toma de Inventario</h2>
+      <button type="button" id="btn-nuevo-inventario" class="btn-nuevo-inventario">Nuevo inventario</button>
+    </div>
     <div class="card">
       <h3>Filtros</h3>
       <div class="grid inv-lista-filtros">
@@ -2793,9 +2808,11 @@ function renderInventarios() {
       </div>
     </div>
     <div class="card">
-      <h3>Lista de inventarios (${inventariosFiltrados.length}${inventariosFiltrados.length !== state.inventarios.length ? ` de ${state.inventarios.length}` : ""})</h3>
+      <div class="inv-lista-head">
+        <h3 style="margin:0;">Lista de inventarios (${inventariosFiltrados.length}${inventariosFiltrados.length !== state.inventarios.length ? ` de ${state.inventarios.length}` : ""})</h3>
+      </div>
       ${inventariosFiltrados.length === 0
-        ? '<p class="empty-state">No hay inventarios que coincidan con los filtros.</p>'
+        ? '<p class="empty-state">No hay inventarios que coincidan con los filtros. Pulsa <strong>Nuevo inventario</strong> para crear uno.</p>'
         : `<div class="table-scroll"><table class="inv-lista-table">
         <thead><tr><th>Folio</th><th>Usuario</th><th>Estado</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th>${admin ? "<th></th>" : ""}</tr></thead>
         <tbody>
