@@ -181,6 +181,33 @@ function filtrarFilasTomaPorBusqueda(texto) {
   const count = document.getElementById("inv-toma-count");
   const total = document.querySelectorAll(".inv-toma-row").length;
   if (count) count.textContent = q ? `${visibles} de ${total} productos` : `${total} productos`;
+  return visibles;
+}
+
+function enfocarCantidadFilaToma(productoId) {
+  if (!productoId) return false;
+  const row = [...document.querySelectorAll(".inv-toma-row")].find((r) => r.dataset.productoId === productoId);
+  if (!row) return false;
+  row.style.display = "";
+  row.classList.add("inv-toma-row-focus");
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  const cant = row.querySelector(".inv-toma-cant");
+  if (cant) {
+    cant.focus({ preventScroll: true });
+    try { cant.select(); } catch (_) { /* ignore */ }
+  }
+  setTimeout(() => row.classList.remove("inv-toma-row-focus"), 1400);
+  return true;
+}
+
+/** Si el texto coincide con un producto, salta a su celda Cantidad. */
+function saltarACantidadDesdeBusqueda(texto) {
+  const id = resolverProductoIdPorNombre(texto);
+  if (!id) return false;
+  const buscar = document.getElementById("det-prod-nombre");
+  if (buscar) buscar.value = "";
+  filtrarFilasTomaPorBusqueda("");
+  return enfocarCantidadFilaToma(id);
 }
 
 function filasTomaInventario(bodegaId, detalles) {
@@ -2310,7 +2337,7 @@ function renderInventarios() {
           ${showDetalleInventarioForm ? `
           <div class="inv-prod-entry inv-prod-entry-buscar">
             <label class="inv-prod-buscar">Buscar producto
-              <input type="search" id="det-prod-nombre" list="inv-productos-list" value="${escapeAttr(nombreProdForm)}" placeholder="Filtrar por nombre..." autocomplete="off" />
+              <input type="search" id="det-prod-nombre" list="inv-productos-list" value="${escapeAttr(nombreProdForm)}" placeholder="Escribe o elige un producto para ir a su cantidad..." autocomplete="off" />
               <datalist id="inv-productos-list">${htmlDatalistProductosInv(productosParaInv)}</datalist>
             </label>
           </div>` : ""}
@@ -2649,9 +2676,11 @@ function renderInventarios() {
               </tbody>
             </table></div>`}
         <div class="actions inv-modal-actions">
-          ${normalizarEstadoInventario(invVer) !== "anulado"
-            ? '<button type="button" id="inv-ver-editar">Editar</button>'
-            : '<span class="small">Inventario anulado (solo lectura)</span>'}
+          ${normalizarEstadoInventario(invVer) === "cerrado"
+            ? '<button type="button" id="inv-ver-editar">Reabrir / Editar</button>'
+            : normalizarEstadoInventario(invVer) !== "anulado"
+              ? '<button type="button" id="inv-ver-editar">Editar</button>'
+              : '<span class="small">Inventario anulado (solo lectura)</span>'}
           <button type="button" id="inv-ver-cerrar" class="btn-salir">Salir</button>
         </div>
       </div>

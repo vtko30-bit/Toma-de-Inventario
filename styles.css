@@ -610,6 +610,16 @@ th {
   margin: 0;
 }
 
+.inv-toma-row-focus {
+  background: #ecfdf5 !important;
+  outline: 2px solid #14b8a6;
+  outline-offset: -2px;
+}
+
+.inv-toma-row-focus td {
+  background: transparent;
+}
+
 .inv-toma-actions {
   justify-content: flex-end;
 }
