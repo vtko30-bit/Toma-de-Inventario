@@ -1554,7 +1554,7 @@ th {
   display: flex;
   flex-wrap: nowrap;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .filt-mov-row label {
@@ -1564,28 +1564,114 @@ th {
 
 .filt-mov-row button {
   flex: 0 0 auto;
-  padding: 8px 14px;
+  padding: 7px 12px;
   white-space: nowrap;
 }
 
+#view-movimientos .mov-form-card,
+#view-movimientos .mov-lista-wrap {
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+#view-movimientos .mov-vista-titulo {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+#view-movimientos .mov-lista-titulo {
+  margin: 10px 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+#view-movimientos .mov-form-grid {
+  grid-template-columns: auto 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+#view-movimientos .mov-form-grid label,
+#view-movimientos .filt-mov-row label,
+#view-movimientos .mov-linea-grid label {
+  font-size: 0.8rem;
+  gap: 3px;
+}
+
+#view-movimientos input,
+#view-movimientos select {
+  padding: 7px 9px;
+  font-size: 0.9rem;
+}
+
 #view-movimientos input[type="date"] {
-  width: 10.5rem;
+  width: 10rem;
   max-width: 100%;
   box-sizing: border-box;
 }
 
 #view-movimientos label:has(input[type="date"]) {
   width: max-content;
-  max-width: 11rem;
-}
-
-#view-movimientos .mov-form-grid {
-  grid-template-columns: auto 1fr 1fr 1fr;
+  max-width: 10.5rem;
 }
 
 #view-movimientos .filt-mov-row label:has(input[type="date"]) {
   flex: 0 0 auto;
   min-width: auto;
+}
+
+#view-movimientos .mov-lineas-container {
+  margin-top: 8px;
+}
+
+#view-movimientos .mov-linea-grid {
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+#view-movimientos .mov-linea-bloqueada {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+#view-movimientos .mov-linea-preview {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+}
+
+#view-movimientos .btn-mov-add {
+  width: 36px;
+  height: 36px;
+  font-size: 1.25rem;
+}
+
+#view-movimientos .mov-actions {
+  margin-top: 8px;
+  gap: 6px;
+}
+
+#view-movimientos .mov-actions button {
+  padding: 7px 12px;
+  font-size: 0.88rem;
+}
+
+#view-movimientos .btn-secondary {
+  background: #fff;
+  color: var(--topbar-ink);
+  border: 1px solid var(--border-strong);
+}
+
+#view-movimientos .btn-secondary:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+#view-movimientos .mov-filtros-compactos {
+  padding-bottom: 8px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
 }
 
 #view-movimientos table th:nth-child(2),
@@ -1595,9 +1681,20 @@ th {
 }
 
 @media (max-width: 900px) {
+  #view-movimientos .mov-form-card,
+  #view-movimientos .mov-lista-wrap {
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+
+  #view-movimientos .mov-vista-titulo {
+    font-size: 1.05rem;
+    margin-bottom: 8px;
+  }
+
   #view-movimientos .mov-form-grid {
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   #view-movimientos .mov-form-grid > label {
@@ -1620,7 +1717,7 @@ th {
 
   #view-movimientos .mov-linea-grid {
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   #view-movimientos .mov-linea-grid > label:first-child,
@@ -1634,45 +1731,54 @@ th {
 
   #view-movimientos .btn-mov-add {
     width: 100%;
-    height: 42px;
+    height: 36px;
   }
 
-  #view-movimientos .actions {
+  #view-movimientos .mov-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 6px;
   }
 
-  #view-movimientos .actions #mov-guardar {
+  #view-movimientos .mov-actions #mov-guardar {
     grid-column: 1 / -1;
   }
 
-  #view-movimientos .filt-mov-row {
+  #view-movimientos .mov-filtros-compactos {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 6px 8px;
     align-items: end;
   }
 
-  #view-movimientos .filt-mov-row label {
+  #view-movimientos .mov-filtros-compactos label {
     flex: none;
     min-width: 0;
     width: auto;
     max-width: none;
   }
 
-  #view-movimientos .filt-mov-row label:has(#filt-mov-producto) {
-    grid-column: 1 / -1;
-  }
-
-  #view-movimientos .filt-mov-row label:has(input[type="date"]) {
+  #view-movimientos .mov-filtros-compactos label:has(input[type="date"]) {
     flex: none;
     min-width: 0;
   }
 
-  #view-movimientos .filt-mov-row button {
-    grid-column: 1 / -1;
-    width: 100%;
+  #view-movimientos .mov-filtros-compactos .filt-mov-producto {
+    grid-column: 1 / 3;
+  }
+
+  #view-movimientos .mov-filtros-compactos #filt-mov-limpiar {
+    grid-column: 3;
+    grid-row: 2;
+    align-self: end;
+    width: auto;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+  }
+
+  #view-movimientos .mov-lista-titulo {
+    margin-top: 8px;
+    font-size: 0.95rem;
   }
 
   #view-movimientos .mov-lista-scroll {
@@ -1694,7 +1800,7 @@ th {
   #view-movimientos .mov-lista-table tbody {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
   #view-movimientos .mov-lista-table tr.row-mov {
@@ -1704,9 +1810,9 @@ th {
       "fecha tipo"
       "producto producto"
       "sucursal cantidad";
-    gap: 6px 10px;
+    gap: 4px 8px;
     align-items: start;
-    padding: 12px;
+    padding: 10px;
     margin: 0;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1717,7 +1823,7 @@ th {
   #view-movimientos .mov-lista-table td {
     border: none;
     padding: 0;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     white-space: normal;
     word-break: break-word;
   }
@@ -1731,7 +1837,7 @@ th {
   #view-movimientos .mov-lista-table .mov-col-fecha {
     grid-area: fecha;
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     color: var(--ink);
   }
 
@@ -1745,7 +1851,7 @@ th {
   #view-movimientos .mov-lista-table .mov-col-producto {
     grid-area: producto;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
   }
 
   #view-movimientos .mov-lista-table .mov-col-sucursal {
@@ -1763,12 +1869,12 @@ th {
   #view-movimientos .mov-lista-table .mov-col-sucursal::before,
   #view-movimientos .mov-lista-table .mov-col-cantidad::before {
     display: block;
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--ink-muted);
-    margin-bottom: 2px;
+    margin-bottom: 1px;
   }
 
   #view-movimientos .mov-lista-table .mov-col-sucursal::before {

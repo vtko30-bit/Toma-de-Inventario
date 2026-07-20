@@ -1949,10 +1949,10 @@ function htmlListaMovimientosFiltrada() {
     ? ` (${movimientosFiltrados.length} de ${total})`
     : ` (${movimientosFiltrados.length})`;
   if (movimientosFiltrados.length === 0) {
-    return `<h3>Movimientos${contador}</h3><p class="empty-state">No hay movimientos que coincidan con los filtros.</p>`;
+    return `<h3 class="mov-lista-titulo">Movimientos${contador}</h3><p class="empty-state">No hay movimientos que coincidan con los filtros.</p>`;
   }
   return `
-    <h3>Movimientos${contador}</h3>
+    <h3 class="mov-lista-titulo">Movimientos${contador}</h3>
     <div class="table-scroll mov-lista-scroll">
       <table class="mov-lista-table">
         <thead><tr><th>Id</th><th>Fecha</th><th>Tipo</th><th>Sucursal</th><th>Producto</th><th>Stock</th><th>Cantidad</th><th>Base</th></tr></thead>
@@ -1985,9 +1985,9 @@ function enlazarFilasMovimiento() {
 
 function actualizarListaMovimientosFiltrada() {
   sincronizarFiltroMovDesdeDom();
-  const card = document.getElementById("mov-lista-card");
-  if (!card) return;
-  card.innerHTML = htmlListaMovimientosFiltrada();
+  const body = document.querySelector("#mov-lista-card .mov-lista-body") || document.getElementById("mov-lista-card");
+  if (!body) return;
+  body.innerHTML = htmlListaMovimientosFiltrada();
   enlazarFilasMovimiento();
 }
 
@@ -2141,13 +2141,13 @@ function renderMovimientos() {
   ).join("");
 
   el.innerHTML = `
-    <div class="card">
-      <h2>Movimientos de Mercaderías</h2>
+    <div class="card mov-form-card">
+      <h2 class="mov-vista-titulo">Movimientos de Mercaderías</h2>
       ${sinSucursales ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
       <input type="hidden" id="mov-id" value="${data?.id || uid("MOV")}" />
       <div class="grid mov-form-grid">
         <label>Fecha<input type="date" id="mov-fecha" value="${cab.fecha}" /></label>
-        <label>Tipo de Movimiento
+        <label>Tipo
           <select id="mov-tipo">
             ${["Ingreso", "Egreso", "Traspaso"].map((x) => `<option ${cab.tipo === x ? "selected" : ""}>${x}</option>`).join("")}
           </select>
@@ -2165,17 +2165,18 @@ function renderMovimientos() {
           </select>
         </label>
       </div>
-      <div id="mov-lineas-container" style="margin-top:12px;">
+      <div id="mov-lineas-container" class="mov-lineas-container">
         ${lineasHtml}
       </div>
-      <div class="actions">
+      <div class="actions mov-actions">
         <button id="mov-guardar">Guardar</button>
-        <button id="mov-editar">Editar</button>
-        <button id="mov-eliminar">Eliminar</button>
+        <button id="mov-editar" class="btn-secondary">Editar</button>
+        <button id="mov-eliminar" class="btn-secondary">Eliminar</button>
       </div>
     </div>
-    <div class="card">
-      <div class="filt-mov-row">
+
+    <div class="card mov-lista-wrap" id="mov-lista-card">
+      <div class="filt-mov-row mov-filtros-compactos">
         <label>Desde<input type="date" id="filt-mov-desde" value="${_movFilter.fechaDesde}" /></label>
         <label>Hasta<input type="date" id="filt-mov-hasta" value="${_movFilter.fechaHasta}" /></label>
         <label>Tipo
@@ -2184,18 +2185,17 @@ function renderMovimientos() {
             ${["Ingreso", "Egreso", "Traspaso"].map((t) => `<option ${_movFilter.tipo === t ? "selected" : ""}>${t}</option>`).join("")}
           </select>
         </label>
-        <label>Producto
+        <label class="filt-mov-producto">Producto
           <select id="filt-mov-producto">
             <option value="">--</option>
             ${state.productos.map((p) => `<option value="${p.id}" ${_movFilter.productoId === p.id ? "selected" : ""}>${p.nombre}</option>`).join("")}
           </select>
         </label>
-        <button type="button" id="filt-mov-limpiar">Limpiar</button>
+        <button type="button" id="filt-mov-limpiar" class="btn-secondary">Limpiar</button>
       </div>
-    </div>
-
-    <div class="card" id="mov-lista-card">
-      ${htmlListaMovimientosFiltrada()}
+      <div class="mov-lista-body">
+        ${htmlListaMovimientosFiltrada()}
+      </div>
     </div>
   `;
 
