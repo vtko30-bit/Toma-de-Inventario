@@ -1574,6 +1574,23 @@ th {
   margin-bottom: 10px;
 }
 
+#view-movimientos .mov-vista-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+#view-movimientos .mov-vista-head .mov-vista-titulo {
+  margin: 0;
+}
+
+#view-movimientos .mov-vista-head #mov-nuevo {
+  flex-shrink: 0;
+}
+
 #view-movimientos .mov-form-editando {
   border-color: rgba(15, 118, 110, 0.35);
   box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.12), var(--shadow);

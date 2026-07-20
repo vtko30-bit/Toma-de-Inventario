@@ -22,6 +22,7 @@ let showDetalleInventarioForm = false;
 let showCabeceraInventarioForm = false;
 let showVerInventario = false;
 let showProductoForm = false;
+let showMovimientoForm = false;
 let _movLineasDraft = [];
 let _movCabeceraDraft = null;
 let _invDetalleDraft = { productoId: "", cantidad: 0 };
@@ -468,8 +469,17 @@ function capturarCabeceraMovDesdeDom() {
   };
 }
 
-function cancelarEdicionMovimiento() {
+function cerrarFormularioMovimiento() {
+  showMovimientoForm = false;
   editingIds.movimiento = null;
+  _movCabeceraDraft = null;
+  _movLineasDraft = [];
+  renderMovimientos();
+}
+
+function iniciarNuevoMovimiento() {
+  editingIds.movimiento = null;
+  showMovimientoForm = true;
   _movCabeceraDraft = {
     fecha: new Date().toISOString().slice(0, 10),
     tipo: "Ingreso",
@@ -478,6 +488,11 @@ function cancelarEdicionMovimiento() {
   };
   _movLineasDraft = [{ productoId: "", empaque: "Unidad", cantidad: 0, bloqueada: false }];
   renderMovimientos();
+  document.getElementById("mov-form-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cancelarEdicionMovimiento() {
+  cerrarFormularioMovimiento();
 }
 
 function filtrarProductosMov(q) {
@@ -2039,8 +2054,10 @@ function htmlListaMovimientosFiltrada() {
 function enlazarFilasMovimiento() {
   document.querySelectorAll(".row-mov").forEach((r) => r.addEventListener("click", () => {
     editingIds.movimiento = r.dataset.id;
+    showMovimientoForm = true;
     _movLineasDraft = [];
     renderMovimientos();
+    document.getElementById("mov-form-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }));
 }
 
@@ -2224,52 +2241,64 @@ function setupLineaMovimiento(index, esEdicionUnica) {
 
 function renderMovimientos() {
   const el = document.getElementById("view-movimientos");
+  if (!el) return;
   const data = editingIds.movimiento ? byId(state.movimientos, editingIds.movimiento) : {};
   const esEdicionUnica = !!editingIds.movimiento;
+  if (esEdicionUnica) showMovimientoForm = true;
+  const mostrarForm = showMovimientoForm;
 
-  if (esEdicionUnica) {
-    _movCabeceraDraft = {
-      fecha: data.fecha || new Date().toISOString().slice(0, 10),
-      tipo: data.tipo || "Ingreso",
-      sucursalId: data.sucursalId || state.sucursales.find((s) => s.nombre === data.sucursal)?.id || "",
-      bodegaId: data.bodegaId || ""
-    };
-    _movLineasDraft = [{
-      productoId: data.productoId || "",
-      empaque: data.empaque || "Unidad",
-      cantidad: data.cantidad ?? 0,
-      bloqueada: false
-    }];
-  } else {
-    if (!_movCabeceraDraft) {
+  if (mostrarForm) {
+    if (esEdicionUnica) {
       _movCabeceraDraft = {
-        fecha: new Date().toISOString().slice(0, 10),
-        tipo: "Ingreso",
-        sucursalId: "",
-        bodegaId: ""
+        fecha: data.fecha || new Date().toISOString().slice(0, 10),
+        tipo: data.tipo || "Ingreso",
+        sucursalId: data.sucursalId || state.sucursales.find((s) => s.nombre === data.sucursal)?.id || "",
+        bodegaId: data.bodegaId || ""
       };
-    }
-    if (_movLineasDraft.length === 0) {
-      _movLineasDraft = [{ productoId: "", empaque: "Unidad", cantidad: 0, bloqueada: false }];
+      _movLineasDraft = [{
+        productoId: data.productoId || "",
+        empaque: data.empaque || "Unidad",
+        cantidad: data.cantidad ?? 0,
+        bloqueada: false
+      }];
+    } else {
+      if (!_movCabeceraDraft) {
+        _movCabeceraDraft = {
+          fecha: new Date().toISOString().slice(0, 10),
+          tipo: "Ingreso",
+          sucursalId: "",
+          bodegaId: ""
+        };
+      }
+      if (_movLineasDraft.length === 0) {
+        _movLineasDraft = [{ productoId: "", empaque: "Unidad", cantidad: 0, bloqueada: false }];
+      }
     }
   }
 
-  const cab = _movCabeceraDraft;
+  const cab = _movCabeceraDraft || {
+    fecha: new Date().toISOString().slice(0, 10),
+    tipo: "Ingreso",
+    sucursalId: "",
+    bodegaId: ""
+  };
   const sinSucursales = state.sucursales.length === 0;
   const sucursalIdActual = cab.sucursalId || "";
   const bodegasFiltradas = sucursalIdActual
     ? state.bodegas.filter((b) => b.sucursalId === sucursalIdActual)
     : state.bodegas;
 
-  const lineasHtml = _movLineasDraft.map((linea, i) =>
-    htmlLineaMovimiento(linea, i, i === _movLineasDraft.length - 1, esEdicionUnica)
-  ).join("");
+  const lineasHtml = mostrarForm
+    ? _movLineasDraft.map((linea, i) =>
+      htmlLineaMovimiento(linea, i, i === _movLineasDraft.length - 1, esEdicionUnica)
+    ).join("")
+    : "";
 
-  el.innerHTML = `
-    <div class="card mov-form-card${esEdicionUnica ? " mov-form-editando" : ""}">
+  const formHtml = mostrarForm ? `
+    <div class="card mov-form-card${esEdicionUnica ? " mov-form-editando" : ""}" id="mov-form-card">
       <div class="mov-form-head">
         <h2 class="mov-vista-titulo">${esEdicionUnica ? "Editar movimiento" : "Nuevo movimiento"}</h2>
-        ${esEdicionUnica ? `<p class="mov-edit-hint">Seleccionado desde la lista · <button type="button" id="mov-cancelar" class="btn-link">Cancelar</button></p>` : ""}
+        <p class="mov-edit-hint">${esEdicionUnica ? "Seleccionado desde la lista · " : ""}<button type="button" id="mov-cancelar" class="btn-link">Cancelar</button></p>
       </div>
       ${sinSucursales ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
       <input type="hidden" id="mov-id" value="${data?.id || uid("MOV")}" />
@@ -2296,13 +2325,17 @@ function renderMovimientos() {
       </div>
       <div class="actions mov-actions">
         <button id="mov-guardar">${esEdicionUnica ? "Guardar cambios" : "Guardar"}</button>
-        ${esEdicionUnica ? `
-          <button id="mov-eliminar" class="btn-danger-outline">Eliminar</button>
-          <button id="mov-cancelar-accion" class="btn-secondary">Cancelar</button>
-        ` : ""}
+        ${esEdicionUnica ? `<button id="mov-eliminar" class="btn-danger-outline">Eliminar</button>` : ""}
+        <button id="mov-cancelar-accion" class="btn-secondary">Cancelar</button>
       </div>
-    </div>
+    </div>` : "";
 
+  el.innerHTML = `
+    <div class="mov-vista-head">
+      <h2 class="mov-vista-titulo">Movimientos de Mercaderías</h2>
+      ${mostrarForm ? "" : `<button type="button" id="mov-nuevo">Nuevo movimiento</button>`}
+    </div>
+    ${formHtml}
     <div class="card mov-lista-wrap" id="mov-lista-card">
       <div class="filt-mov-row mov-filtros-compactos">
         <label>Desde<input type="date" id="filt-mov-desde" value="${_movFilter.fechaDesde}" /></label>
@@ -2329,6 +2362,9 @@ function renderMovimientos() {
 
   setupFiltrosMovimiento();
   enlazarFilasMovimiento();
+  document.getElementById("mov-nuevo")?.addEventListener("click", iniciarNuevoMovimiento);
+
+  if (!mostrarForm) return;
 
   document.querySelectorAll(".mov-tipo-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -2368,10 +2404,10 @@ function renderMovimientos() {
     });
   });
 
-  document.getElementById("mov-cancelar")?.addEventListener("click", cancelarEdicionMovimiento);
-  document.getElementById("mov-cancelar-accion")?.addEventListener("click", cancelarEdicionMovimiento);
+  document.getElementById("mov-cancelar")?.addEventListener("click", cerrarFormularioMovimiento);
+  document.getElementById("mov-cancelar-accion")?.addEventListener("click", cerrarFormularioMovimiento);
 
-  document.getElementById("mov-guardar").addEventListener("click", () => {
+  document.getElementById("mov-guardar")?.addEventListener("click", () => {
     const sucursalId = document.getElementById("mov-sucursal").value;
     const sucursalNombre = byId(state.sucursales, sucursalId)?.nombre || "";
     const tipoMov = document.getElementById("mov-tipo").value;
@@ -2413,7 +2449,9 @@ function renderMovimientos() {
       };
       const i = state.movimientos.findIndex((x) => x.id === mov.id);
       if (i >= 0) state.movimientos[i] = mov;
+      showMovimientoForm = false;
       editingIds.movimiento = null;
+      _movCabeceraDraft = null;
       _movLineasDraft = [];
       toast("Movimiento actualizado", "success");
       render();
@@ -2444,8 +2482,9 @@ function renderMovimientos() {
       aplicarMovimiento(mov);
       creados++;
     });
-    _movCabeceraDraft = capturarCabeceraMovDesdeDom();
-    _movLineasDraft = [{ productoId: "", empaque: "Unidad", cantidad: 0, bloqueada: false }];
+    showMovimientoForm = false;
+    _movCabeceraDraft = null;
+    _movLineasDraft = [];
     toast(`${creados} movimiento(s) creado(s)`, "success");
     render();
   });
@@ -2454,7 +2493,9 @@ function renderMovimientos() {
     if (!confirmar("¿Eliminar este movimiento?")) return;
     const id = document.getElementById("mov-id").value.trim();
     state.movimientos = state.movimientos.filter((x) => x.id !== id);
+    showMovimientoForm = false;
     editingIds.movimiento = null;
+    _movCabeceraDraft = null;
     _movLineasDraft = [];
     toast("Movimiento eliminado", "success");
     render();
