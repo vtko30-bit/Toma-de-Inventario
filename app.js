@@ -51,7 +51,7 @@ function etiquetaRol(role) {
 
 function puedeAccederVista(viewId) {
   if (!soloTomaInventario()) return true;
-  return viewId === "inventarios";
+  return viewId === "inicio" || viewId === "inventarios";
 }
 
 function normalizarEstadoInventario(inv) {
@@ -821,6 +821,7 @@ function limpiarRecetasPorProducto(productoId) {
 }
 
 function render() {
+  renderInicio();
   renderDashboard();
   renderProductos();
   renderRecetas();
@@ -893,7 +894,7 @@ function toggleMobileNav() {
 
 function navigateToView(viewId) {
   if (!viewId) return;
-  if (!puedeAccederVista(viewId)) viewId = "inventarios";
+  if (!puedeAccederVista(viewId)) viewId = "inicio";
   document.querySelectorAll(".nav-btn").forEach((x) => {
     x.classList.toggle("active", x.dataset.view === viewId);
   });
@@ -917,6 +918,125 @@ function setupNav() {
 }
 
 let _charts = {};
+
+const HOME_MENU_ITEMS = [
+  {
+    id: "inventarios",
+    label: "Toma de Inventario",
+    desc: "Contar, revisar y cerrar inventarios",
+    icon: "fa-clipboard-list",
+    access: "all"
+  },
+  {
+    id: "productos",
+    label: "Productos",
+    desc: "Catálogo, stock y empaques",
+    icon: "fa-box",
+    access: "user"
+  },
+  {
+    id: "movimientos",
+    label: "Movimientos",
+    desc: "Ingresos y egresos de stock",
+    icon: "fa-right-left",
+    access: "user"
+  },
+  {
+    id: "bodegas",
+    label: "Bodegas",
+    desc: "Ubicaciones de almacenamiento",
+    icon: "fa-warehouse",
+    access: "admin"
+  },
+  {
+    id: "sucursales",
+    label: "Sucursales",
+    desc: "Puntos de operación",
+    icon: "fa-store",
+    access: "admin"
+  },
+  {
+    id: "familias",
+    label: "Familias",
+    desc: "Agrupar productos",
+    icon: "fa-tags",
+    access: "admin"
+  },
+  {
+    id: "categorias",
+    label: "Categorías",
+    desc: "Clasificación del catálogo",
+    icon: "fa-folder-tree",
+    access: "admin"
+  },
+  {
+    id: "recetas",
+    label: "Recetas",
+    desc: "Insumos de productos procesados",
+    icon: "fa-utensils",
+    access: "admin"
+  },
+  {
+    id: "usuarios",
+    label: "Usuarios",
+    desc: "Roles y accesos del equipo",
+    icon: "fa-users",
+    access: "admin"
+  },
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    desc: "Resumen y gráficos",
+    icon: "fa-chart-line",
+    access: "user"
+  }
+];
+
+function itemsMenuInicioVisibles() {
+  const admin = esAdmin();
+  const soloInv = soloTomaInventario();
+  return HOME_MENU_ITEMS.filter((item) => {
+    if (item.access === "all") return true;
+    if (soloInv) return false;
+    if (item.access === "admin") return admin;
+    return true;
+  });
+}
+
+function renderInicio() {
+  const el = document.getElementById("view-inicio");
+  if (!el) return;
+  const user = window.Auth?.currentUser;
+  const nombre = (user?.nombre || user?.email || "equipo").split(" ")[0];
+  const items = itemsMenuInicioVisibles();
+
+  el.innerHTML = `
+    <div class="home-hub">
+      <header class="home-hub-intro">
+        <p class="home-hub-brand">Control de Inventario</p>
+        <h2 class="home-hub-title">Hola, ${escapeAttr(nombre)}</h2>
+        <p class="home-hub-sub">Elige una opción para continuar</p>
+      </header>
+      <div class="home-hub-grid" role="navigation" aria-label="Menú principal">
+        ${items
+          .map(
+            (item) => `
+          <button type="button" class="home-tile" data-home-view="${item.id}">
+            <span class="home-tile-icon" aria-hidden="true"><i class="fa-solid ${item.icon}"></i></span>
+            <span class="home-tile-text">
+              <span class="home-tile-label">${item.label}</span>
+              <span class="home-tile-desc">${item.desc}</span>
+            </span>
+          </button>`
+          )
+          .join("")}
+      </div>
+    </div>`;
+
+  el.querySelectorAll("[data-home-view]").forEach((btn) => {
+    btn.addEventListener("click", () => navigateToView(btn.dataset.homeView));
+  });
+}
 
 function renderDashboard() {
   const el = document.getElementById("view-dashboard");
@@ -2474,16 +2594,31 @@ async function asegurarUsuariosTenantEnFormInv() {
   actualizarDatalistUsuariosInv();
 }
 
+function claveOrdenInventario(inv) {
+  if (inv?.createdAt) {
+    const t = Date.parse(inv.createdAt);
+    if (!Number.isNaN(t)) return t;
+  }
+  const fecha = inv?.fecha || "";
+  const hora = horaInventario(inv) || "00:00";
+  const hhmmss = hora.length === 5 ? `${hora}:00` : hora;
+  const t = Date.parse(`${fecha}T${hhmmss}`);
+  if (!Number.isNaN(t)) return t;
+  return 0;
+}
+
 function filtrarInventariosLista() {
   const fecha = _invListaFilter.fecha;
   const bodegaId = _invListaFilter.bodegaId || "";
   const filtroEstado = _invListaFilter.estado || "activos";
-  return state.inventarios.filter((i) => {
-    const okFecha = !fecha || i.fecha === fecha;
-    const okBodega = !bodegaId || i.bodegaId === bodegaId;
-    const okEstado = inventarioCoincideFiltroEstado(i, filtroEstado);
-    return okFecha && okBodega && okEstado;
-  });
+  return state.inventarios
+    .filter((i) => {
+      const okFecha = !fecha || i.fecha === fecha;
+      const okBodega = !bodegaId || i.bodegaId === bodegaId;
+      const okEstado = inventarioCoincideFiltroEstado(i, filtroEstado);
+      return okFecha && okBodega && okEstado;
+    })
+    .sort((a, b) => claveOrdenInventario(b) - claveOrdenInventario(a));
 }
 
 function renderInventarios() {
@@ -3611,7 +3746,8 @@ function aplicarPermisosPorRol() {
   });
   const exportDrop = document.getElementById("exportDropdown");
   if (exportDrop) exportDrop.style.display = soloInv ? "none" : "";
-  if (soloInv) navigateToView("inventarios");
+  navigateToView("inicio");
+  renderInicio();
 }
 
 function setupUserMenu() {

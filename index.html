@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=126" />
+  <link rel="stylesheet" href="styles.css?v=128" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body>
@@ -66,6 +66,7 @@
 
     <main class="layout">
       <nav id="sidebar" class="sidebar">
+        <button class="nav-btn active" data-view="inicio">Inicio</button>
         <button class="nav-btn" data-view="inventarios">Toma de Inventario</button>
         <button class="nav-btn" data-view="productos" data-hide-inventario-only="true">Productos</button>
         <button class="nav-btn" data-view="familias" data-admin-only="true">Familia</button>
@@ -75,11 +76,12 @@
         <button class="nav-btn" data-view="movimientos" data-hide-inventario-only="true">Movimientos de inventario</button>
         <button class="nav-btn" data-view="recetas" data-admin-only="true">Receta</button>
         <button class="nav-btn" data-view="usuarios" data-admin-only="true">Usuarios</button>
-        <button class="nav-btn active" data-view="dashboard" data-hide-inventario-only="true">Dashboard</button>
+        <button class="nav-btn" data-view="dashboard" data-hide-inventario-only="true">Dashboard</button>
       </nav>
 
       <section class="content">
-        <article id="view-dashboard" class="view active"></article>
+        <article id="view-inicio" class="view active"></article>
+        <article id="view-dashboard" class="view"></article>
         <article id="view-productos" class="view"></article>
         <article id="view-recetas" class="view"></article>
         <article id="view-familias" class="view"></article>
@@ -95,9 +97,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  <script src="supabase-config.js?v=126"></script>
-  <script src="auth.js?v=126"></script>
-  <script src="data.js?v=126"></script>
-  <script src="app.js?v=126"></script>
+  <script src="supabase-config.js?v=128"></script>
+  <script src="auth.js?v=128"></script>
+  <script src="data.js?v=128"></script>
+  <script src="app.js?v=128"></script>
 </body>
 </html>
