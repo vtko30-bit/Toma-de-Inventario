@@ -1873,12 +1873,11 @@ th {
 
   #view-inventarios .inv-lista-table tr.row-inv {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
     grid-template-areas:
-      "fecha fecha estado"
-      "usuario usuario usuario"
-      "sucursal bodega accion";
-    gap: 6px 10px;
+      "fecha fecha fecha estado"
+      "usuario sucursal bodega accion";
+    gap: 6px 8px;
     align-items: start;
     padding: 12px;
     margin: 0;
@@ -1891,7 +1890,7 @@ th {
   #view-inventarios .inv-lista-table td {
     border: none;
     padding: 0;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     white-space: normal;
     word-break: break-word;
   }
@@ -1906,7 +1905,8 @@ th {
 
   #view-inventarios .inv-lista-table .inv-col-usuario {
     grid-area: usuario;
-    color: var(--ink-muted);
+    min-width: 0;
+    color: var(--ink);
   }
 
   #view-inventarios .inv-lista-table .inv-col-sucursal {
@@ -1919,15 +1919,20 @@ th {
     min-width: 0;
   }
 
+  #view-inventarios .inv-lista-table .inv-col-usuario::before,
   #view-inventarios .inv-lista-table .inv-col-sucursal::before,
   #view-inventarios .inv-lista-table .inv-col-bodega::before {
     display: block;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--ink-muted);
     margin-bottom: 2px;
+  }
+
+  #view-inventarios .inv-lista-table .inv-col-usuario::before {
+    content: "Usuario";
   }
 
   #view-inventarios .inv-lista-table .inv-col-sucursal::before {
