@@ -295,7 +295,8 @@ function actualizarProgresoToma() {
   const pendientes = total - revisados;
   const progreso = document.getElementById("inv-toma-progreso");
   if (progreso) {
-    progreso.textContent = total === 0
+    progreso.textContent = `${revisados}/${total}`;
+    progreso.title = total === 0
       ? "Sin productos"
       : `Revisados ${revisados} de ${total}${pendientes > 0 ? ` · Faltan ${pendientes}` : ""}`;
     progreso.classList.toggle("inv-toma-completo", total > 0 && pendientes === 0);
@@ -307,6 +308,7 @@ function actualizarProgresoToma() {
       : "Cerrar inventario (todos confirmados)";
   }
   syncInvCheckAll();
+  syncConfirmarSelVisibility();
 }
 
 function syncInvCheckAll() {
@@ -316,6 +318,15 @@ function syncInvCheckAll() {
   const checks = visibles.map((r) => r.querySelector(".inv-toma-check")).filter(Boolean);
   checkAll.checked = checks.length > 0 && checks.every((c) => c.checked);
   checkAll.indeterminate = checks.some((c) => c.checked) && !checkAll.checked;
+}
+
+function syncConfirmarSelVisibility() {
+  const btn = document.getElementById("inv-confirmar-sel");
+  if (!btn) return;
+  const hay = [...document.querySelectorAll(".inv-toma-row")].some(
+    (row) => row.style.display !== "none" && row.querySelector(".inv-toma-check")?.checked
+  );
+  btn.hidden = !hay;
 }
 
 function aplicarFiltrosFilasToma() {
@@ -359,6 +370,7 @@ function confirmarSeleccionadasToma() {
   }
   seleccionadas.forEach((row) => confirmarCantidadFilaToma(row));
   aplicarFiltrosFilasToma();
+  syncConfirmarSelVisibility();
   toast(`${seleccionadas.length} producto${seleccionadas.length === 1 ? "" : "s"} confirmado${seleccionadas.length === 1 ? "" : "s"}`, "success");
   document.getElementById("det-prod-nombre")?.focus();
   return seleccionadas.length;
@@ -2597,35 +2609,40 @@ function renderInventarios() {
       </div>
 
       ${showDetalleInventarioForm ? `
-      <div class="card">
-        <div class="inv-prod-buscar-row">
-          <label class="inv-prod-buscar">Buscar producto
-            <input type="search" id="det-prod-nombre" list="inv-productos-list" value="${escapeAttr(nombreProdForm)}" placeholder="Escribe o elige un producto para ir a su cantidad..." autocomplete="off" />
-            <datalist id="inv-productos-list">${htmlDatalistProductosInv(productosParaInv)}</datalist>
-          </label>
-          <span class="small" id="inv-toma-progreso">${(() => {
-            const rev = filasToma.filter((f) => f.locked).length;
-            const tot = filasToma.length;
-            const pend = tot - rev;
-            return tot === 0 ? "Sin productos" : `Revisados ${rev} de ${tot}${pend > 0 ? ` · Faltan ${pend}` : ""}`;
-          })()}</span>
-        </div>
-        <div class="inv-toma-toolbar">
-          <div class="inv-toma-vista-filtros" role="group" aria-label="Filtrar por revisión">
+      <div class="card inv-toma-card">
+        <div class="inv-toma-sticky">
+          <div class="inv-prod-buscar-row">
+            <label class="inv-prod-buscar">
+              <span class="inv-prod-buscar-label">Buscar producto</span>
+              <input type="search" id="det-prod-nombre" list="inv-productos-list" value="${escapeAttr(nombreProdForm)}" placeholder="Buscar producto..." autocomplete="off" />
+              <datalist id="inv-productos-list">${htmlDatalistProductosInv(productosParaInv)}</datalist>
+            </label>
+            <span class="inv-toma-progreso-badge" id="inv-toma-progreso" title="${(() => {
+              const rev = filasToma.filter((f) => f.locked).length;
+              const tot = filasToma.length;
+              const pend = tot - rev;
+              return tot === 0 ? "Sin productos" : `Revisados ${rev} de ${tot}${pend > 0 ? ` · Faltan ${pend}` : ""}`;
+            })()}">${(() => {
+              const rev = filasToma.filter((f) => f.locked).length;
+              const tot = filasToma.length;
+              return `${rev}/${tot}`;
+            })()}</span>
+          </div>
+          <div class="inv-toma-vista-filtros inv-toma-segmentos" role="group" aria-label="Filtrar por revisión">
             <button type="button" class="inv-vista-btn${_invTomaVistaFiltro === "todos" ? " active" : ""}" data-inv-vista="todos">Todos</button>
             <button type="button" class="inv-vista-btn${_invTomaVistaFiltro === "pendientes" ? " active" : ""}" data-inv-vista="pendientes">Pendientes</button>
             <button type="button" class="inv-vista-btn${_invTomaVistaFiltro === "revisados" ? " active" : ""}" data-inv-vista="revisados">Revisados</button>
           </div>
-          <button type="button" id="inv-confirmar-sel" class="btn-confirmar-sel">Confirmar seleccionadas</button>
+          <button type="button" id="inv-confirmar-sel" class="btn-confirmar-sel" hidden>Confirmar seleccionadas</button>
         </div>
-        <div class="table-scroll">
+        <div class="table-scroll inv-toma-scroll">
         <table class="inv-toma-table">
           <thead>
             <tr>
               <th class="inv-toma-check-col"><input type="checkbox" id="inv-check-all" title="Seleccionar visibles" /></th>
               <th>Nombre</th>
-              <th>Uni. de Med.</th>
-              <th>Stock</th>
+              <th class="inv-toma-um-col">Uni. de Med.</th>
+              <th class="inv-toma-stock-col">Stock</th>
               <th>Cantidad</th>
               <th class="inv-toma-edit-col"></th>
             </tr>
@@ -2637,12 +2654,16 @@ function renderInventarios() {
                     const p = f.producto;
                     const locked = !!f.locked;
                     const oculta = busquedaOcultaFila(p.nombre, _invProductoBusqueda) || filaTomaOcultaPorVista(locked);
+                    const unidad = p.unidad || "—";
                     return `<tr class="inv-toma-row${locked ? " inv-toma-locked" : ""}"${oculta ? ' style="display:none"' : ""} data-producto-id="${escapeAttr(p.id)}" data-stock="${f.stock}" data-prod-nombre="${escapeAttr(p.nombre || "")}">
                       <td class="inv-toma-check-col"><input type="checkbox" class="inv-toma-check" ${f.checked ? "checked" : ""} /></td>
-                      <td>${escapeAttr(p.nombre || "")}</td>
-                      <td>${escapeAttr(p.unidad || "—")}</td>
-                      <td class="inv-toma-stock">${f.stock}</td>
-                      <td>
+                      <td class="inv-toma-nombre">
+                        <span class="inv-toma-nombre-txt">${escapeAttr(p.nombre || "")}</span>
+                        <span class="inv-toma-meta">${escapeAttr(unidad)} · Stock ${f.stock}</span>
+                      </td>
+                      <td class="inv-toma-um-col">${escapeAttr(unidad)}</td>
+                      <td class="inv-toma-stock inv-toma-stock-col">${f.stock}</td>
+                      <td class="inv-toma-cant-col">
                         <input type="text" class="inv-toma-cant" value="${f.cantidad}" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" ${locked ? "readonly" : ""} />
                       </td>
                       <td class="inv-toma-edit-col">
@@ -2876,12 +2897,14 @@ function renderInventarios() {
         check.addEventListener("change", () => {
           capturarInvTomaDraftDesdeDom();
           syncInvCheckAll();
+          syncConfirmarSelVisibility();
         });
       });
 
       const checkAll = document.getElementById("inv-check-all");
       if (checkAll) {
         syncInvCheckAll();
+        syncConfirmarSelVisibility();
         checkAll.addEventListener("change", () => {
           const visibles = [...document.querySelectorAll(".inv-toma-row")].filter((r) => r.style.display !== "none");
           visibles.forEach((row) => {
@@ -2890,6 +2913,7 @@ function renderInventarios() {
           });
           capturarInvTomaDraftDesdeDom();
           syncInvCheckAll();
+          syncConfirmarSelVisibility();
         });
       }
 

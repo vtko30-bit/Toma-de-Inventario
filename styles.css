@@ -883,18 +883,38 @@ th {
   margin-bottom: 12px;
 }
 
+.inv-toma-card {
+  padding-top: 0;
+}
+
+.inv-toma-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--surface);
+  padding: 12px 0 10px;
+  margin: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 .inv-prod-buscar-row {
   display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
 }
 
 .inv-prod-buscar-row .inv-prod-buscar {
-  flex: 1 1 220px;
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
+}
+
+.inv-prod-buscar-label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
 }
 
 .inv-prod-buscar {
@@ -904,6 +924,29 @@ th {
 .inv-prod-buscar input {
   width: 100%;
   box-sizing: border-box;
+}
+
+.inv-toma-progreso-badge,
+#inv-toma-progreso {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 10px;
+  min-width: 3.4rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-ring);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+#inv-toma-progreso.inv-toma-completo {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
 }
 
 .inv-toma-toolbar {
@@ -919,6 +962,40 @@ th {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.inv-toma-segmentos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-soft);
+}
+
+.inv-toma-segmentos .inv-vista-btn {
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  padding: 9px 8px;
+  font-size: 0.82rem;
+  box-shadow: none;
+}
+
+.inv-toma-segmentos .inv-vista-btn:last-child {
+  border-right: none;
+}
+
+.inv-toma-segmentos .inv-vista-btn:hover {
+  background: #e2e8f0;
+}
+
+.inv-toma-segmentos .inv-vista-btn.active {
+  background: var(--primary);
+  color: #fff;
 }
 
 .inv-vista-btn {
@@ -947,26 +1024,30 @@ th {
 }
 
 .btn-confirmar-sel {
-  background: var(--primary);
+  width: 100%;
+  margin-top: 8px;
+  background: var(--surface-soft);
+  color: var(--primary);
+  border: 1px solid var(--primary-ring);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .btn-confirmar-sel:hover {
-  background: var(--primary-hover);
-}
-
-#inv-toma-progreso {
-  flex: 0 0 auto;
-  margin: 0;
-  padding-bottom: 8px;
-  white-space: nowrap;
-  font-weight: 600;
-  color: var(--ink-muted);
-}
-
-#inv-toma-progreso.inv-toma-completo {
+  background: var(--primary-soft);
   color: var(--primary);
+}
+
+.btn-confirmar-sel[hidden] {
+  display: none !important;
+}
+
+.inv-toma-meta {
+  display: none;
+}
+
+.inv-toma-nombre-txt {
+  display: block;
 }
 
 .inv-folio-badge {
@@ -1112,8 +1193,86 @@ th {
     grid-template-columns: minmax(0, 1fr) 5.75rem;
   }
 
+  .inv-toma-sticky {
+    top: var(--mobile-menu-top, 0px);
+    margin-left: -2px;
+    margin-right: -2px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  .inv-prod-buscar-label {
+    display: none;
+  }
+
+  .inv-toma-scroll {
+    overflow-x: visible;
+  }
+
   .inv-toma-table {
-    min-width: 480px;
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .inv-toma-table .inv-toma-um-col,
+  .inv-toma-table .inv-toma-stock-col {
+    display: none;
+  }
+
+  .inv-toma-table th:nth-child(2),
+  .inv-toma-table td.inv-toma-nombre {
+    width: auto;
+  }
+
+  .inv-toma-table th:nth-child(5),
+  .inv-toma-table td.inv-toma-cant-col {
+    width: 5.5rem;
+  }
+
+  .inv-toma-check-col {
+    width: 36px;
+  }
+
+  .inv-toma-edit-col {
+    width: 2.5rem;
+  }
+
+  .inv-toma-meta {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  .inv-toma-nombre-txt {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .inv-toma-cant {
+    max-width: 100%;
+    padding: 8px 6px;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .inv-toma-table th,
+  .inv-toma-table td {
+    padding: 8px 6px;
+    vertical-align: middle;
+  }
+
+  .inv-toma-actions {
+    flex-wrap: wrap;
+  }
+
+  .inv-toma-actions button {
+    flex: 1 1 auto;
   }
 }
 
