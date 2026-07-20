@@ -468,6 +468,48 @@ function capturarCabeceraMovDesdeDom() {
   };
 }
 
+function cancelarEdicionMovimiento() {
+  editingIds.movimiento = null;
+  _movCabeceraDraft = {
+    fecha: new Date().toISOString().slice(0, 10),
+    tipo: "Ingreso",
+    sucursalId: "",
+    bodegaId: ""
+  };
+  _movLineasDraft = [{ productoId: "", empaque: "Unidad", cantidad: 0, bloqueada: false }];
+  renderMovimientos();
+}
+
+function filtrarProductosMov(q) {
+  const lista = productosOrdenadosPorNombre(state.productos);
+  const s = String(q || "").trim().toLowerCase();
+  if (!s) return lista.slice(0, 10);
+  return lista
+    .filter((p) => String(p.nombre || "").toLowerCase().includes(s))
+    .slice(0, 10);
+}
+
+function htmlTipoMovimientoSegmentos(tipoActual) {
+  const tipos = [
+    { id: "Ingreso", cls: "mov-tipo-ingreso" },
+    { id: "Egreso", cls: "mov-tipo-egreso" },
+    { id: "Traspaso", cls: "mov-tipo-traspaso" }
+  ];
+  return `
+    <div class="mov-tipo-wrap">
+      <span class="mov-campo-label">Tipo</span>
+      <div class="mov-tipo-segmentos" role="group" aria-label="Tipo de movimiento">
+        ${tipos
+          .map(
+            (t) => `
+          <button type="button" class="mov-tipo-btn ${t.cls}${tipoActual === t.id ? " active" : ""}" data-tipo="${t.id}">${t.id}</button>`
+          )
+          .join("")}
+      </div>
+      <input type="hidden" id="mov-tipo" value="${escapeAttr(tipoActual || "Ingreso")}" />
+    </div>`;
+}
+
 let _suppressNextSave = false;
 let _saving = false;
 let _saveQueued = false;
@@ -1959,7 +2001,7 @@ function htmlListaMovimientosFiltrada() {
         <tbody>
           ${movimientosFiltrados.map((m) => {
             const p = byId(state.productos, m.productoId);
-            return `<tr data-id="${m.id}" class="row-mov" style="cursor:pointer;">
+            return `<tr data-id="${m.id}" class="row-mov${editingIds.movimiento === m.id ? " is-selected" : ""}" style="cursor:pointer;">
               <td class="mov-col-id">${m.id}</td>
               <td class="mov-col-fecha">${m.fecha}</td>
               <td class="mov-col-tipo">${m.tipo}</td>
@@ -2021,22 +2063,28 @@ function htmlLineaMovimiento(linea, index, esUltima, esEdicionUnica) {
   if (bloqueada) {
     return `
       <div class="mov-linea grid mov-linea-grid mov-linea-bloqueada" data-linea="${index}">
-        <div><span class="inv-dato-label">Producto</span><span class="inv-dato-valor">${prod?.nombre || "—"}</span></div>
+        <div class="mov-prod-picker">
+          <span class="inv-dato-label">Producto</span>
+          <span class="inv-dato-valor">${prod?.nombre || "—"}</span>
+          <span class="mov-prod-stock-hint">Stock: ${prod ? calcularStockVisible(prod) : "—"}</span>
+        </div>
         <div><span class="inv-dato-label">Formato</span><span class="inv-dato-valor">${empaque}</span></div>
         <div><span class="inv-dato-label">Cantidad</span><span class="inv-dato-valor">${linea.cantidad}</span></div>
-        <div><span class="inv-dato-label">Stock</span><span class="inv-dato-valor">${prod ? calcularStockVisible(prod) : "—"}</span></div>
         <div class="mov-add-cell"></div>
       </div>`;
   }
 
   return `
     <div class="mov-linea grid mov-linea-grid" data-linea="${index}">
-      <label>Producto
-        <select id="mov-producto-${index}">
-          <option value="">--</option>
-          ${state.productos.map((p) => opcionProductoConStock(p, linea.productoId)).join("")}
-        </select>
-      </label>
+      <div class="mov-prod-picker">
+        <label for="mov-prod-buscar-${index}">Producto</label>
+        <input type="search" id="mov-prod-buscar-${index}" class="mov-prod-buscar"
+          value="${escapeAttr(prod?.nombre || "")}"
+          placeholder="Buscar por nombre…" autocomplete="off" />
+        <input type="hidden" id="mov-producto-${index}" value="${escapeAttr(linea.productoId || "")}" />
+        <div class="mov-prod-sugerencias" id="mov-prod-sug-${index}" hidden></div>
+        <p class="mov-prod-stock-hint" id="mov-stock-info-${index}">${prod ? `Stock: ${calcularStockVisible(prod)}` : ""}</p>
+      </div>
       <label>Formato
         <select id="mov-empaque-${index}">
           ${TIPOS_EMPAQUE.map((e) => `<option ${empaque === e ? "selected" : ""}>${e}</option>`).join("")}
@@ -2045,13 +2093,9 @@ function htmlLineaMovimiento(linea, index, esUltima, esEdicionUnica) {
       <label><span class="mov-cantidad-label" data-linea="${index}">Cantidad</span>
         <input type="number" id="mov-cantidad-${index}" min="0" step="any" value="${linea.cantidad ?? 0}" />
       </label>
-      <label>Stock
-        <div id="mov-stock-info-${index}" class="stock-display">${prod ? calcularStockVisible(prod) : "—"}</div>
-      </label>
-      <label class="mov-add-cell">
-        <span class="mov-add-label">&nbsp;</span>
+      <div class="mov-add-cell">
         ${esUltima && !esEdicionUnica ? `<button type="button" class="btn-mov-add" data-linea="${index}" title="Agregar otra línea">+</button>` : ""}
-      </label>
+      </div>
     </div>
     <p class="small mov-linea-preview" id="mov-preview-${index}"></p>`;
 }
@@ -2065,36 +2109,98 @@ function capturarLineaMovDesdeDom(index) {
   };
 }
 
-function setupLineaMovimiento(index, esEdicionUnica) {
-  const prodSel = document.getElementById(`mov-producto-${index}`);
+function pintarSugerenciasProductoMov(index, query) {
+  const box = document.getElementById(`mov-prod-sug-${index}`);
+  if (!box) return;
+  const items = filtrarProductosMov(query);
+  if (items.length === 0) {
+    box.innerHTML = `<button type="button" class="mov-prod-sug-empty" disabled>Sin coincidencias</button>`;
+    box.hidden = false;
+    return;
+  }
+  box.innerHTML = items
+    .map(
+      (p) => `
+    <button type="button" class="mov-prod-sug-item" data-producto-id="${escapeAttr(p.id)}" data-linea="${index}">
+      <span class="mov-prod-sug-nombre">${escapeAttr(p.nombre || "")}</span>
+      <span class="mov-prod-sug-stock">${calcularStockVisible(p)}</span>
+    </button>`
+    )
+    .join("");
+  box.hidden = false;
+  box.querySelectorAll(".mov-prod-sug-item").forEach((btn) => {
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      seleccionarProductoMovLinea(index, btn.dataset.productoId);
+    });
+  });
+}
+
+function seleccionarProductoMovLinea(index, productoId) {
+  const prod = byId(state.productos, productoId);
+  const hidden = document.getElementById(`mov-producto-${index}`);
+  const buscar = document.getElementById(`mov-prod-buscar-${index}`);
+  const box = document.getElementById(`mov-prod-sug-${index}`);
+  const empaqueSel = document.getElementById(`mov-empaque-${index}`);
+  if (hidden) hidden.value = productoId || "";
+  if (buscar) buscar.value = prod?.nombre || "";
+  if (box) {
+    box.hidden = true;
+    box.innerHTML = "";
+  }
+  if (prod && empaqueSel) empaqueSel.value = prod.empaque || "Unidad";
+  actualizarLineaMovimientoUI(index);
+}
+
+function actualizarLineaMovimientoUI(index) {
+  const prod = byId(state.productos, document.getElementById(`mov-producto-${index}`)?.value);
   const empaqueSel = document.getElementById(`mov-empaque-${index}`);
   const cantInp = document.getElementById(`mov-cantidad-${index}`);
   const cantLabel = document.querySelector(`.mov-cantidad-label[data-linea="${index}"]`);
   const stockEl = document.getElementById(`mov-stock-info-${index}`);
   const preview = document.getElementById(`mov-preview-${index}`);
-  if (!prodSel) return;
+  if (stockEl) stockEl.textContent = prod ? `Stock: ${calcularStockVisible(prod)}` : "";
+  const empaque = empaqueSel?.value || "Unidad";
+  const porEmpaque = cantidadPorEmpaqueProducto(prod);
+  const cant = Number(cantInp?.value || 0);
+  const um = prod?.unidad || "unidad base";
+  if (cantLabel) cantLabel.textContent = `Cantidad (${empaque}${empaque !== "Unidad" ? "s" : ""})`;
+  if (preview) {
+    preview.textContent = porEmpaque > 0 && cant > 0 && prod
+      ? `Equivale a ${calcularCantidadBase(cant, "empaque", porEmpaque)} ${um} en stock`
+      : "";
+  }
+}
 
-  const actualizar = () => {
-    const prod = byId(state.productos, prodSel.value);
-    if (stockEl) stockEl.textContent = prod ? calcularStockVisible(prod) : "—";
-    const empaque = empaqueSel.value;
-    const porEmpaque = cantidadPorEmpaqueProducto(prod);
-    const cant = Number(cantInp.value || 0);
-    const um = prod?.unidad || "unidad base";
-    if (cantLabel) cantLabel.textContent = `Cantidad (${empaque}${empaque !== "Unidad" ? "s" : ""})`;
-    if (preview) {
-      preview.textContent = porEmpaque > 0 && cant > 0 ? `Equivale a ${calcularCantidadBase(cant, "empaque", porEmpaque)} ${um} en stock` : "";
-    }
-  };
+function setupLineaMovimiento(index, esEdicionUnica) {
+  const buscar = document.getElementById(`mov-prod-buscar-${index}`);
+  const empaqueSel = document.getElementById(`mov-empaque-${index}`);
+  const cantInp = document.getElementById(`mov-cantidad-${index}`);
+  const box = document.getElementById(`mov-prod-sug-${index}`);
+  if (!buscar) return;
 
-  prodSel.addEventListener("change", () => {
-    const prod = byId(state.productos, prodSel.value);
-    if (prod) empaqueSel.value = prod.empaque || "Unidad";
-    actualizar();
+  buscar.addEventListener("focus", () => {
+    pintarSugerenciasProductoMov(index, buscar.value);
   });
-  empaqueSel.addEventListener("change", actualizar);
-  cantInp.addEventListener("input", actualizar);
-  actualizar();
+  buscar.addEventListener("input", () => {
+    const hidden = document.getElementById(`mov-producto-${index}`);
+    const prod = byId(state.productos, hidden?.value);
+    if (!prod || buscar.value.trim() !== String(prod.nombre || "").trim()) {
+      if (hidden) hidden.value = "";
+      actualizarLineaMovimientoUI(index);
+    }
+    pintarSugerenciasProductoMov(index, buscar.value);
+  });
+  buscar.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (box) {
+        box.hidden = true;
+      }
+    }, 150);
+  });
+  empaqueSel?.addEventListener("change", () => actualizarLineaMovimientoUI(index));
+  cantInp?.addEventListener("input", () => actualizarLineaMovimientoUI(index));
+  actualizarLineaMovimientoUI(index);
 }
 
 function renderMovimientos() {
@@ -2141,17 +2247,18 @@ function renderMovimientos() {
   ).join("");
 
   el.innerHTML = `
-    <div class="card mov-form-card">
-      <h2 class="mov-vista-titulo">Movimientos de Mercaderías</h2>
+    <div class="card mov-form-card${esEdicionUnica ? " mov-form-editando" : ""}">
+      <div class="mov-form-head">
+        <h2 class="mov-vista-titulo">${esEdicionUnica ? "Editar movimiento" : "Nuevo movimiento"}</h2>
+        ${esEdicionUnica ? `<p class="mov-edit-hint">Seleccionado desde la lista · <button type="button" id="mov-cancelar" class="btn-link">Cancelar</button></p>` : ""}
+      </div>
       ${sinSucursales ? '<p class="empty-state">Primero crea al menos una sucursal en la vista <strong>Sucursales</strong>.</p>' : ""}
       <input type="hidden" id="mov-id" value="${data?.id || uid("MOV")}" />
+      <div class="mov-form-top">
+        <label class="mov-fecha-field">Fecha<input type="date" id="mov-fecha" value="${cab.fecha}" /></label>
+        ${htmlTipoMovimientoSegmentos(cab.tipo || "Ingreso")}
+      </div>
       <div class="grid mov-form-grid">
-        <label>Fecha<input type="date" id="mov-fecha" value="${cab.fecha}" /></label>
-        <label>Tipo
-          <select id="mov-tipo">
-            ${["Ingreso", "Egreso", "Traspaso"].map((x) => `<option ${cab.tipo === x ? "selected" : ""}>${x}</option>`).join("")}
-          </select>
-        </label>
         <label>Sucursal
           <select id="mov-sucursal" ${sinSucursales ? "disabled" : ""}>
             <option value="">--</option>
@@ -2169,9 +2276,11 @@ function renderMovimientos() {
         ${lineasHtml}
       </div>
       <div class="actions mov-actions">
-        <button id="mov-guardar">Guardar</button>
-        <button id="mov-editar" class="btn-secondary">Editar</button>
-        <button id="mov-eliminar" class="btn-secondary">Eliminar</button>
+        <button id="mov-guardar">${esEdicionUnica ? "Guardar cambios" : "Guardar"}</button>
+        ${esEdicionUnica ? `
+          <button id="mov-eliminar" class="btn-danger-outline">Eliminar</button>
+          <button id="mov-cancelar-accion" class="btn-secondary">Cancelar</button>
+        ` : ""}
       </div>
     </div>
 
@@ -2202,6 +2311,15 @@ function renderMovimientos() {
   setupFiltrosMovimiento();
   enlazarFilasMovimiento();
 
+  document.querySelectorAll(".mov-tipo-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tipo = btn.dataset.tipo;
+      const hidden = document.getElementById("mov-tipo");
+      if (hidden) hidden.value = tipo;
+      document.querySelectorAll(".mov-tipo-btn").forEach((b) => b.classList.toggle("active", b.dataset.tipo === tipo));
+    });
+  });
+
   const movSucSel = document.getElementById("mov-sucursal");
   if (movSucSel) {
     movSucSel.addEventListener("change", () => {
@@ -2230,6 +2348,9 @@ function renderMovimientos() {
       renderMovimientos();
     });
   });
+
+  document.getElementById("mov-cancelar")?.addEventListener("click", cancelarEdicionMovimiento);
+  document.getElementById("mov-cancelar-accion")?.addEventListener("click", cancelarEdicionMovimiento);
 
   document.getElementById("mov-guardar").addEventListener("click", () => {
     const sucursalId = document.getElementById("mov-sucursal").value;
@@ -2310,12 +2431,7 @@ function renderMovimientos() {
     render();
   });
 
-  document.getElementById("mov-editar").addEventListener("click", () => {
-    editingIds.movimiento = document.getElementById("mov-id").value.trim();
-    _movLineasDraft = [];
-    renderMovimientos();
-  });
-  document.getElementById("mov-eliminar").addEventListener("click", () => {
+  document.getElementById("mov-eliminar")?.addEventListener("click", () => {
     if (!confirmar("¿Eliminar este movimiento?")) return;
     const id = document.getElementById("mov-id").value.trim();
     state.movimientos = state.movimientos.filter((x) => x.id !== id);
