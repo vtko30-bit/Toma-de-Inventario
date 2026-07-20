@@ -1848,6 +1848,7 @@ th {
 #view-movimientos .mov-actions {
   margin-top: 8px;
   gap: 6px;
+  justify-content: flex-end;
 }
 
 #view-movimientos .mov-actions button {
@@ -2002,13 +2003,10 @@ th {
   }
 
   #view-movimientos .mov-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
-  }
-
-  #view-movimientos .mov-actions #mov-guardar {
-    grid-column: 1 / -1;
   }
 
   #view-movimientos .mov-filtros-compactos {
