@@ -803,13 +803,55 @@ th {
 }
 
 @media (max-width: 900px) {
+  .inv-datos-card .inv-datos-titulo {
+    display: none;
+  }
+
+  .inv-datos-card .inv-datos-head {
+    margin-bottom: 8px;
+  }
+
+  .inv-datos-card .inv-folio-bajo-titulo {
+    margin-top: 0;
+  }
+
   .inv-datos-resumen {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr auto;
+    align-items: end;
+  }
+
+  .inv-dato-fecha {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .inv-dato-usuario {
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .inv-dato-sucursal {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .inv-dato-bodega {
+    grid-column: 2;
+    grid-row: 2;
   }
 
   .inv-datos-resumen-accion {
-    grid-column: 1 / -1;
+    grid-column: 3;
+    grid-row: 2;
     justify-content: flex-end;
+    align-items: flex-end;
+    padding-bottom: 0;
+  }
+
+  .inv-datos-resumen-accion .btn-editar-cab {
+    width: 36px;
+    height: 36px;
+    font-size: 0.85rem;
   }
 }
 
@@ -1712,23 +1754,31 @@ th {
   .sidebar {
     display: none;
     position: fixed;
-    top: 0;
+    top: var(--mobile-menu-top, 7.5rem);
     left: 0;
     bottom: 0;
     width: min(280px, 85vw);
     z-index: 1100;
     overflow-y: auto;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+    padding-top: 12px;
   }
 
   .sidebar.open {
     display: flex;
   }
 
+  .nav-backdrop.open {
+    top: var(--mobile-menu-top, 7.5rem);
+  }
+
   .topbar {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 1200;
   }
 
   .topbar-title {

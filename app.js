@@ -856,12 +856,24 @@ function closeMobileNav() {
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
+function syncMobileMenuTop() {
+  if (window.innerWidth > 900) {
+    document.documentElement.style.removeProperty("--mobile-menu-top");
+    return;
+  }
+  const topbar = document.querySelector(".topbar");
+  if (!topbar) return;
+  const bottom = Math.ceil(topbar.getBoundingClientRect().bottom);
+  document.documentElement.style.setProperty("--mobile-menu-top", `${bottom}px`);
+}
+
 function toggleMobileNav() {
   const sidebar = document.getElementById("sidebar");
   const backdrop = document.getElementById("nav-backdrop");
   const btn = document.getElementById("btnNavMenu");
   if (!sidebar || !backdrop || !btn) return;
   const abrir = !sidebar.classList.contains("open");
+  if (abrir) syncMobileMenuTop();
   sidebar.classList.toggle("open", abrir);
   backdrop.classList.toggle("open", abrir);
   btn.setAttribute("aria-expanded", abrir ? "true" : "false");
@@ -886,6 +898,10 @@ function setupNav() {
   });
   document.getElementById("btnNavMenu")?.addEventListener("click", toggleMobileNav);
   document.getElementById("nav-backdrop")?.addEventListener("click", closeMobileNav);
+  window.addEventListener("resize", () => {
+    syncMobileMenuTop();
+    if (window.innerWidth > 900) closeMobileNav();
+  });
 }
 
 let _charts = {};
@@ -2532,10 +2548,10 @@ function renderInventarios() {
         <input type="hidden" id="inv-id" value="${cab.id}" />
         ${camposBloqueados ? `
         <div class="inv-datos-resumen">
-          <div><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${escapeAttr(cab.fecha || "—")}</span></div>
-          <div><span class="inv-dato-label">Usuario</span><span class="inv-dato-valor">${escapeAttr(cab.nombre || "—")}</span></div>
-          <div><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${escapeAttr(sucursalNombreCab)}</span></div>
-          <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${escapeAttr(bodegaNombreCab)}</span></div>
+          <div class="inv-dato-fecha"><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${escapeAttr(cab.fecha || "—")}</span></div>
+          <div class="inv-dato-usuario"><span class="inv-dato-label">Usuario</span><span class="inv-dato-valor">${escapeAttr(cab.nombre || "—")}</span></div>
+          <div class="inv-dato-sucursal"><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${escapeAttr(sucursalNombreCab)}</span></div>
+          <div class="inv-dato-bodega"><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${escapeAttr(bodegaNombreCab)}</span></div>
           <div class="inv-datos-resumen-accion">
             <button type="button" id="inv-editar-cab" class="btn-editar-cab" title="Editar datos" aria-label="Editar datos del inventario">
               <i class="fa-solid fa-pen" aria-hidden="true"></i>
