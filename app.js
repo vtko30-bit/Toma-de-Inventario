@@ -124,7 +124,7 @@ function normalizarInventariosEstado() {
 }
 
 function etiquetaEstadoInventario(estado) {
-  const map = { borrador: "Borrador", cerrado: "Cerrado", anulado: "Anulado" };
+  const map = { borrador: "Abierto", cerrado: "Cerrado", anulado: "Anulado" };
   return map[estado] || estado;
 }
 
@@ -3063,7 +3063,7 @@ function renderInventarios() {
         <label>Estado
           <select id="f-inv-estado">
             <option value="activos" ${_invListaFilter.estado === "activos" ? "selected" : ""}>Activos (sin anulados)</option>
-            <option value="borrador" ${_invListaFilter.estado === "borrador" ? "selected" : ""}>Borrador</option>
+            <option value="borrador" ${_invListaFilter.estado === "borrador" ? "selected" : ""}>Abierto</option>
             <option value="cerrado" ${_invListaFilter.estado === "cerrado" ? "selected" : ""}>Cerrado</option>
             <option value="anulado" ${_invListaFilter.estado === "anulado" ? "selected" : ""}>Anulado</option>
             <option value="todos" ${_invListaFilter.estado === "todos" ? "selected" : ""}>Todos</option>
