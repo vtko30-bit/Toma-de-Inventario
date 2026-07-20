@@ -1762,6 +1762,10 @@ th {
     grid-template-columns: 1fr 1fr;
   }
 
+  .inv-lista-filtros > label:first-child {
+    grid-column: 1 / -1;
+  }
+
   .inv-filtros-accion {
     grid-column: 1 / -1;
   }
