@@ -980,7 +980,7 @@ const HOME_MENU_SVGS = {
 };
 
 const HOME_MENU_ITEMS = [
-  { id: "movimientos", label: "Movimientos", access: "user" },
+  { id: "movimientos", label: "Movimientos de mercaderías", access: "user" },
   { id: "inventarios", label: "Toma de Inventario", access: "all" },
   { id: "productos", label: "Productos", access: "user" },
   { id: "familias", label: "Familias", access: "admin" },
@@ -1953,15 +1953,26 @@ function htmlListaMovimientosFiltrada() {
   }
   return `
     <h3>Movimientos${contador}</h3>
-    <table>
-      <thead><tr><th>Id</th><th>Fecha</th><th>Tipo</th><th>Sucursal</th><th>Producto</th><th>Stock</th><th>Cantidad</th><th>Base</th></tr></thead>
-      <tbody>
-        ${movimientosFiltrados.map((m) => {
-          const p = byId(state.productos, m.productoId);
-          return `<tr data-id="${m.id}" class="row-mov" style="cursor:pointer;"><td>${m.id}</td><td>${m.fecha}</td><td>${m.tipo}</td><td>${m.sucursal}</td><td>${p?.nombre || ""}</td><td>${p ? calcularStockVisible(p) : "—"}</td><td>${formatoCantidadMovimiento(m, p)}</td><td>${m.cantidadBase ?? m.cantidad}</td></tr>`;
-        }).join("")}
-      </tbody>
-    </table>`;
+    <div class="table-scroll mov-lista-scroll">
+      <table class="mov-lista-table">
+        <thead><tr><th>Id</th><th>Fecha</th><th>Tipo</th><th>Sucursal</th><th>Producto</th><th>Stock</th><th>Cantidad</th><th>Base</th></tr></thead>
+        <tbody>
+          ${movimientosFiltrados.map((m) => {
+            const p = byId(state.productos, m.productoId);
+            return `<tr data-id="${m.id}" class="row-mov" style="cursor:pointer;">
+              <td class="mov-col-id">${m.id}</td>
+              <td class="mov-col-fecha">${m.fecha}</td>
+              <td class="mov-col-tipo">${m.tipo}</td>
+              <td class="mov-col-sucursal">${m.sucursal || ""}</td>
+              <td class="mov-col-producto">${p?.nombre || ""}</td>
+              <td class="mov-col-stock">${p ? calcularStockVisible(p) : "—"}</td>
+              <td class="mov-col-cantidad">${formatoCantidadMovimiento(m, p)}</td>
+              <td class="mov-col-base">${m.cantidadBase ?? m.cantidad}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function enlazarFilasMovimiento() {

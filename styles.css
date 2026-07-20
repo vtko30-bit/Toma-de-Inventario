@@ -1568,16 +1568,6 @@ th {
   white-space: nowrap;
 }
 
-@media (max-width: 900px) {
-  .filt-mov-row {
-    flex-wrap: wrap;
-  }
-  .filt-mov-row label {
-    flex: 1 1 140px;
-    min-width: 140px;
-  }
-}
-
 #view-movimientos input[type="date"] {
   width: 10.5rem;
   max-width: 100%;
@@ -1602,6 +1592,193 @@ th {
 #view-movimientos table td:nth-child(2) {
   width: 1%;
   white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  #view-movimientos .mov-form-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  #view-movimientos .mov-form-grid > label {
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  #view-movimientos input[type="date"],
+  #view-movimientos select,
+  #view-movimientos input[type="number"] {
+    width: 100%;
+    max-width: none;
+  }
+
+  #view-movimientos label:has(input[type="date"]) {
+    width: auto;
+    max-width: none;
+  }
+
+  #view-movimientos .mov-linea-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  #view-movimientos .mov-linea-grid > label:first-child,
+  #view-movimientos .mov-linea-grid > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  #view-movimientos .mov-add-cell {
+    align-items: stretch;
+  }
+
+  #view-movimientos .btn-mov-add {
+    width: 100%;
+    height: 42px;
+  }
+
+  #view-movimientos .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  #view-movimientos .actions #mov-guardar {
+    grid-column: 1 / -1;
+  }
+
+  #view-movimientos .filt-mov-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: end;
+  }
+
+  #view-movimientos .filt-mov-row label {
+    flex: none;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+  }
+
+  #view-movimientos .filt-mov-row label:has(#filt-mov-producto) {
+    grid-column: 1 / -1;
+  }
+
+  #view-movimientos .filt-mov-row label:has(input[type="date"]) {
+    flex: none;
+    min-width: 0;
+  }
+
+  #view-movimientos .filt-mov-row button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  #view-movimientos .mov-lista-scroll {
+    overflow-x: visible;
+  }
+
+  #view-movimientos .mov-lista-table {
+    min-width: 0;
+    width: 100%;
+    border: none;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  #view-movimientos .mov-lista-table thead {
+    display: none;
+  }
+
+  #view-movimientos .mov-lista-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #view-movimientos .mov-lista-table tr.row-mov {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "fecha tipo"
+      "producto producto"
+      "sucursal cantidad";
+    gap: 6px 10px;
+    align-items: start;
+    padding: 12px;
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+
+  #view-movimientos .mov-lista-table td {
+    border: none;
+    padding: 0;
+    font-size: 0.85rem;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-id,
+  #view-movimientos .mov-lista-table .mov-col-stock,
+  #view-movimientos .mov-lista-table .mov-col-base {
+    display: none;
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-fecha {
+    grid-area: fecha;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--ink);
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-tipo {
+    grid-area: tipo;
+    justify-self: end;
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-producto {
+    grid-area: producto;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-sucursal {
+    grid-area: sucursal;
+    min-width: 0;
+    color: var(--ink-muted);
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-cantidad {
+    grid-area: cantidad;
+    justify-self: end;
+    font-weight: 700;
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-sucursal::before,
+  #view-movimientos .mov-lista-table .mov-col-cantidad::before {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ink-muted);
+    margin-bottom: 2px;
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-sucursal::before {
+    content: "Sucursal";
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-cantidad::before {
+    content: "Cantidad";
+    text-align: right;
+  }
 }
 
 .prod-lista-head {
