@@ -2789,6 +2789,7 @@ function renderInventarios() {
     }
 
     if (showDetalleInventarioForm) {
+      syncMobileMenuTop();
       document.getElementById("inv-observacion")?.addEventListener("change", () => {
         sincronizarObservacionInventarioDesdeDom();
       });
