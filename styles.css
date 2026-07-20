@@ -1880,6 +1880,39 @@ th {
   outline-offset: -2px;
 }
 
+#view-movimientos .mov-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+#view-movimientos .mov-badge-ingreso {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+#view-movimientos .mov-badge-egreso {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+#view-movimientos .mov-badge-traspaso {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+#view-movimientos .mov-col-id {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   #view-movimientos .mov-form-card,
   #view-movimientos .mov-lista-wrap {
@@ -2017,90 +2050,80 @@ th {
   #view-movimientos .mov-lista-table tbody {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 
   #view-movimientos .mov-lista-table tr.row-mov {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "fecha tipo"
-      "producto producto"
-      "sucursal cantidad";
-    gap: 4px 8px;
-    align-items: start;
-    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
     margin: 0;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: 12px;
     box-shadow: var(--shadow-sm);
   }
 
   #view-movimientos .mov-lista-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
     border: none;
     padding: 0;
-    font-size: 0.82rem;
+    font-size: 0.86rem;
     white-space: normal;
     word-break: break-word;
   }
 
-  #view-movimientos .mov-lista-table .mov-col-id,
+  #view-movimientos .mov-lista-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ink-muted);
+  }
+
   #view-movimientos .mov-lista-table .mov-col-stock,
   #view-movimientos .mov-lista-table .mov-col-base {
     display: none;
   }
 
-  #view-movimientos .mov-lista-table .mov-col-fecha {
-    grid-area: fecha;
+  #view-movimientos .mov-lista-table .mov-col-producto {
+    order: -1;
+    display: block;
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: 1rem;
     color: var(--ink);
+    line-height: 1.25;
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #view-movimientos .mov-lista-table .mov-col-producto::before {
+    display: none;
   }
 
   #view-movimientos .mov-lista-table .mov-col-tipo {
-    grid-area: tipo;
-    justify-self: end;
-    font-weight: 600;
-    color: var(--primary);
+    align-items: center;
   }
 
-  #view-movimientos .mov-lista-table .mov-col-producto {
-    grid-area: producto;
+  #view-movimientos .mov-lista-table .mov-col-fecha {
     font-weight: 600;
-    font-size: 0.9rem;
-  }
-
-  #view-movimientos .mov-lista-table .mov-col-sucursal {
-    grid-area: sucursal;
-    min-width: 0;
-    color: var(--ink-muted);
+    color: var(--ink);
   }
 
   #view-movimientos .mov-lista-table .mov-col-cantidad {
-    grid-area: cantidad;
-    justify-self: end;
     font-weight: 700;
   }
 
-  #view-movimientos .mov-lista-table .mov-col-sucursal::before,
-  #view-movimientos .mov-lista-table .mov-col-cantidad::before {
-    display: block;
-    font-size: 0.62rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+  #view-movimientos .mov-lista-table .mov-col-id {
+    font-size: 0.8rem;
     color: var(--ink-muted);
-    margin-bottom: 1px;
-  }
-
-  #view-movimientos .mov-lista-table .mov-col-sucursal::before {
-    content: "Sucursal";
-  }
-
-  #view-movimientos .mov-lista-table .mov-col-cantidad::before {
-    content: "Cantidad";
-    text-align: right;
   }
 }
 

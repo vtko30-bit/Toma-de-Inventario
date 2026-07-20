@@ -1984,6 +1984,24 @@ function sincronizarFiltroMovDesdeDom() {
   };
 }
 
+function folioCortoMovimiento(id) {
+  const s = String(id || "").trim();
+  if (!s) return "—";
+  const partes = s.split("-");
+  const ultimo = partes[partes.length - 1] || s;
+  return `#${ultimo}`;
+}
+
+function claseBadgeTipoMov(tipo) {
+  const t = String(tipo || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (t === "egreso") return "mov-badge-egreso";
+  if (t === "traspaso") return "mov-badge-traspaso";
+  return "mov-badge-ingreso";
+}
+
 function htmlListaMovimientosFiltrada() {
   const movimientosFiltrados = aplicarFiltroMovimientos(state.movimientos);
   const total = state.movimientos.length;
@@ -2001,15 +2019,16 @@ function htmlListaMovimientosFiltrada() {
         <tbody>
           ${movimientosFiltrados.map((m) => {
             const p = byId(state.productos, m.productoId);
-            return `<tr data-id="${m.id}" class="row-mov${editingIds.movimiento === m.id ? " is-selected" : ""}" style="cursor:pointer;">
-              <td class="mov-col-id">${m.id}</td>
-              <td class="mov-col-fecha">${m.fecha}</td>
-              <td class="mov-col-tipo">${m.tipo}</td>
-              <td class="mov-col-sucursal">${m.sucursal || ""}</td>
-              <td class="mov-col-producto">${p?.nombre || ""}</td>
-              <td class="mov-col-stock">${p ? calcularStockVisible(p) : "—"}</td>
-              <td class="mov-col-cantidad">${formatoCantidadMovimiento(m, p)}</td>
-              <td class="mov-col-base">${m.cantidadBase ?? m.cantidad}</td>
+            const tipo = m.tipo || "";
+            return `<tr data-id="${escapeAttr(m.id)}" class="row-mov${editingIds.movimiento === m.id ? " is-selected" : ""}" style="cursor:pointer;">
+              <td class="mov-col-id" data-label="Id" title="${escapeAttr(m.id || "")}">${folioCortoMovimiento(m.id)}</td>
+              <td class="mov-col-fecha" data-label="Fecha">${escapeAttr(m.fecha || "")}</td>
+              <td class="mov-col-tipo" data-label="Tipo"><span class="mov-badge ${claseBadgeTipoMov(tipo)}">${escapeAttr(tipo)}</span></td>
+              <td class="mov-col-sucursal" data-label="Sucursal">${escapeAttr(m.sucursal || "")}</td>
+              <td class="mov-col-producto" data-label="Producto">${escapeAttr(p?.nombre || "")}</td>
+              <td class="mov-col-stock" data-label="Stock">${p ? calcularStockVisible(p) : "—"}</td>
+              <td class="mov-col-cantidad" data-label="Cantidad">${formatoCantidadMovimiento(m, p)}</td>
+              <td class="mov-col-base" data-label="Base">${m.cantidadBase ?? m.cantidad}</td>
             </tr>`;
           }).join("")}
         </tbody>
