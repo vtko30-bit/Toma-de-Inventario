@@ -3081,14 +3081,14 @@ function renderInventarios() {
       ${inventariosFiltrados.length === 0
         ? '<p class="empty-state">No hay inventarios que coincidan con los filtros. Pulsa <strong>Nuevo inventario</strong> para crear uno.</p>'
         : `<div class="table-scroll"><table class="inv-lista-table">
-        <thead><tr><th>Folio</th><th>Usuario</th><th>Estado</th><th>Sucursal</th><th>Bodega</th><th>Fecha</th><th>Items</th>${admin ? "<th></th>" : ""}</tr></thead>
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Sucursal</th><th>Bodega</th><th>Estado</th>${admin ? "<th></th>" : ""}</tr></thead>
         <tbody>
           ${inventariosFiltrados.map((i) => {
             const estado = normalizarEstadoInventario(i);
             const btnAnular = admin && estado !== "anulado"
               ? `<button type="button" class="btn-link btn-inv-anular" data-id="${i.id}" title="Anular inventario">Anular</button>`
               : "";
-            return `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${escapeAttr(folioInventario(i))}</td><td>${escapeAttr(i.nombre || "")}</td><td>${htmlBadgeEstadoInventario(estado)}</td><td>${escapeAttr(i.sucursal || "")}</td><td>${escapeAttr(byId(state.bodegas, i.bodegaId)?.nombre || "")}</td><td>${escapeAttr(etiquetaFechaHoraInventario(i))}</td><td>${i.detalles?.length || 0}</td>${admin ? `<td>${btnAnular}</td>` : ""}</tr>`;
+            return `<tr data-id="${i.id}" class="row-inv" style="cursor:pointer;"><td>${escapeAttr(etiquetaFechaHoraInventario(i))}</td><td>${escapeAttr(i.nombre || "")}</td><td>${escapeAttr(i.sucursal || "")}</td><td>${escapeAttr(byId(state.bodegas, i.bodegaId)?.nombre || "")}</td><td>${htmlBadgeEstadoInventario(estado)}</td>${admin ? `<td>${btnAnular}</td>` : ""}</tr>`;
           }).join("")}
         </tbody>
       </table></div>`}
