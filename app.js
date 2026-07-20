@@ -930,66 +930,66 @@ const HOME_MENU_SVGS = {
     </svg>`,
   productos: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <path d="M60 14l38 20v40L60 94 22 74V34Z" fill="#ccfbf1" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M60 14v40M22 34l38 20 38-20" fill="none" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M44 48l16 8 16-8" fill="none" stroke="#14b8a6" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M60 14l38 20v40L60 94 22 74V34Z" fill="#fde68a" stroke="#b45309" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M60 14v40M22 34l38 20 38-20" fill="none" stroke="#b45309" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M44 48l16 8 16-8" fill="none" stroke="#d97706" stroke-width="2.5" stroke-linecap="round"/>
     </svg>`,
   movimientos: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <rect x="18" y="28" width="36" height="44" rx="8" fill="#ccfbf1" stroke="#0f766e" stroke-width="3"/>
-      <rect x="66" y="28" width="36" height="44" rx="8" fill="#99f6e4" stroke="#0f766e" stroke-width="3"/>
-      <path d="M48 42h20M62 36l10 6-10 6" fill="none" stroke="#0f766e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M72 62H52M58 56l-10 6 10 6" fill="none" stroke="#0f766e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="18" y="28" width="36" height="44" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3"/>
+      <rect x="66" y="28" width="36" height="44" rx="8" fill="#93c5fd" stroke="#1d4ed8" stroke-width="3"/>
+      <path d="M48 42h20M62 36l10 6-10 6" fill="none" stroke="#1e40af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M72 62H52M58 56l-10 6 10 6" fill="none" stroke="#1e40af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`,
   bodegas: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <path d="M16 78V42l44-28 44 28v36H16Z" fill="#ccfbf1" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M16 42h88" stroke="#0f766e" stroke-width="3"/>
-      <rect x="46" y="52" width="28" height="26" rx="3" fill="#99f6e4" stroke="#0f766e" stroke-width="2.5"/>
-      <path d="M30 60h10M30 70h10M80 60h10M80 70h10" stroke="#14b8a6" stroke-width="3" stroke-linecap="round"/>
+      <path d="M16 78V42l44-28 44 28v36H16Z" fill="#ffedd5" stroke="#c2410c" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M16 42h88" stroke="#c2410c" stroke-width="3"/>
+      <rect x="46" y="52" width="28" height="26" rx="3" fill="#fdba74" stroke="#c2410c" stroke-width="2.5"/>
+      <path d="M30 60h10M30 70h10M80 60h10M80 70h10" stroke="#ea580c" stroke-width="3" stroke-linecap="round"/>
     </svg>`,
   sucursales: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <path d="M20 44h80v40H20Z" fill="#ccfbf1" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M16 44l10-18h68l10 18" fill="#99f6e4" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <rect x="48" y="56" width="24" height="28" rx="2" fill="#fff" stroke="#0f766e" stroke-width="2.5"/>
-      <path d="M32 58h12v12H32ZM76 58h12v12H76Z" fill="#ecfdf5" stroke="#0f766e" stroke-width="2"/>
+      <path d="M20 44h80v40H20Z" fill="#e0e7ff" stroke="#4338ca" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M16 44l10-18h68l10 18" fill="#a5b4fc" stroke="#4338ca" stroke-width="3" stroke-linejoin="round"/>
+      <rect x="48" y="56" width="24" height="28" rx="2" fill="#fff" stroke="#4338ca" stroke-width="2.5"/>
+      <path d="M32 58h12v12H32ZM76 58h12v12H76Z" fill="#eef2ff" stroke="#4338ca" stroke-width="2"/>
     </svg>`,
   familias: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <path d="M28 28h34l10 10v40c0 4-3 8-8 8H28c-5 0-8-4-8-8V36c0-4 3-8 8-8Z" fill="#ccfbf1" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M52 22h34l10 10v40c0 4-3 8-8 8H62" fill="#99f6e4" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <circle cx="40" cy="48" r="4" fill="#0f766e"/>
-      <circle cx="68" cy="42" r="4" fill="#0f766e"/>
+      <path d="M28 28h34l10 10v40c0 4-3 8-8 8H28c-5 0-8-4-8-8V36c0-4 3-8 8-8Z" fill="#ecfccb" stroke="#4d7c0f" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M52 22h34l10 10v40c0 4-3 8-8 8H62" fill="#bef264" stroke="#4d7c0f" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="40" cy="48" r="4" fill="#65a30d"/>
+      <circle cx="68" cy="42" r="4" fill="#3f6212"/>
     </svg>`,
   categorias: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <path d="M22 30h28l8 8h40v40H22Z" fill="#ccfbf1" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <path d="M34 18h24l8 8H34Z" fill="#99f6e4" stroke="#0f766e" stroke-width="2.5" stroke-linejoin="round"/>
-      <path d="M38 52h44M38 64h30" stroke="#14b8a6" stroke-width="3" stroke-linecap="round"/>
+      <path d="M22 30h28l8 8h40v40H22Z" fill="#ede9fe" stroke="#7c3aed" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M34 18h24l8 8H34Z" fill="#c4b5fd" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M38 52h44M38 64h30" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round"/>
     </svg>`,
   recetas: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <ellipse cx="60" cy="72" rx="34" ry="10" fill="#99f6e4" stroke="#0f766e" stroke-width="3"/>
-      <path d="M26 72c0-22 15-40 34-40s34 18 34 40" fill="#ccfbf1" stroke="#0f766e" stroke-width="3"/>
-      <path d="M60 22v12M48 28c4 4 8 6 12 6s8-2 12-6" fill="none" stroke="#0f766e" stroke-width="3" stroke-linecap="round"/>
-      <circle cx="48" cy="58" r="4" fill="#14b8a6"/>
-      <circle cx="68" cy="52" r="5" fill="#0f766e"/>
+      <ellipse cx="60" cy="72" rx="34" ry="10" fill="#fed7aa" stroke="#ea580c" stroke-width="3"/>
+      <path d="M26 72c0-22 15-40 34-40s34 18 34 40" fill="#ffedd5" stroke="#ea580c" stroke-width="3"/>
+      <path d="M60 22v12M48 28c4 4 8 6 12 6s8-2 12-6" fill="none" stroke="#c2410c" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="48" cy="58" r="4" fill="#fb923c"/>
+      <circle cx="68" cy="52" r="5" fill="#ea580c"/>
     </svg>`,
   usuarios: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <circle cx="60" cy="30" r="14" fill="#ccfbf1" stroke="#0f766e" stroke-width="3"/>
-      <path d="M32 82c4-18 16-28 28-28s24 10 28 28" fill="#99f6e4" stroke="#0f766e" stroke-width="3" stroke-linejoin="round"/>
-      <circle cx="28" cy="38" r="10" fill="#ecfdf5" stroke="#0f766e" stroke-width="2.5"/>
-      <path d="M12 78c2-12 10-18 16-18" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-linecap="round"/>
-      <circle cx="92" cy="38" r="10" fill="#ecfdf5" stroke="#0f766e" stroke-width="2.5"/>
-      <path d="M108 78c-2-12-10-18-16-18" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="60" cy="30" r="14" fill="#fce7f3" stroke="#be185d" stroke-width="3"/>
+      <path d="M32 82c4-18 16-28 28-28s24 10 28 28" fill="#f9a8d4" stroke="#be185d" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="28" cy="38" r="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2.5"/>
+      <path d="M12 78c2-12 10-18 16-18" fill="none" stroke="#be185d" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="92" cy="38" r="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2.5"/>
+      <path d="M108 78c-2-12-10-18-16-18" fill="none" stroke="#be185d" stroke-width="2.5" stroke-linecap="round"/>
     </svg>`,
   dashboard: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <rect x="16" y="16" width="88" height="68" rx="10" fill="#ccfbf1" stroke="#0f766e" stroke-width="3"/>
-      <path d="M30 66V48M48 66V36M66 66V52M84 66V28" stroke="#0f766e" stroke-width="6" stroke-linecap="round"/>
-      <path d="M28 40l18-10 18 8 20-16" fill="none" stroke="#14b8a6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="16" y="16" width="88" height="68" rx="10" fill="#cffafe" stroke="#0e7490" stroke-width="3"/>
+      <path d="M30 66V48M48 66V36M66 66V52M84 66V28" stroke="#0e7490" stroke-width="6" stroke-linecap="round"/>
+      <path d="M28 40l18-10 18 8 20-16" fill="none" stroke="#06b6d4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`
 };
 
@@ -1034,7 +1034,7 @@ function renderInicio() {
         ${items
           .map(
             (item) => `
-          <button type="button" class="home-tile" data-home-view="${item.id}">
+          <button type="button" class="home-tile home-tile--${item.id}" data-home-view="${item.id}">
             <span class="home-tile-art">${HOME_MENU_SVGS[item.id] || ""}</span>
             <span class="home-tile-label">${item.label}</span>
           </button>`

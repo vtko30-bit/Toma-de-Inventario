@@ -362,12 +362,12 @@ button:active {
   width: 100%;
   max-width: 128px;
   line-height: 0;
-  filter: drop-shadow(0 10px 14px rgba(15, 118, 110, 0.12));
+  filter: drop-shadow(0 10px 14px rgba(15, 23, 42, 0.1));
   transition: filter 0.2s ease, transform 0.2s ease;
 }
 
 .home-tile:hover .home-tile-art {
-  filter: drop-shadow(0 14px 18px rgba(15, 118, 110, 0.2));
+  filter: drop-shadow(0 14px 18px rgba(15, 23, 42, 0.16));
   transform: scale(1.04);
 }
 
@@ -384,11 +384,19 @@ button:active {
   letter-spacing: -0.02em;
   line-height: 1.25;
   color: var(--topbar-ink);
+  transition: color 0.15s ease;
 }
 
-.home-tile:hover .home-tile-label {
-  color: var(--primary);
-}
+.home-tile--inventarios:hover .home-tile-label { color: #0f766e; }
+.home-tile--productos:hover .home-tile-label { color: #b45309; }
+.home-tile--movimientos:hover .home-tile-label { color: #1d4ed8; }
+.home-tile--bodegas:hover .home-tile-label { color: #c2410c; }
+.home-tile--sucursales:hover .home-tile-label { color: #4338ca; }
+.home-tile--familias:hover .home-tile-label { color: #4d7c0f; }
+.home-tile--categorias:hover .home-tile-label { color: #7c3aed; }
+.home-tile--recetas:hover .home-tile-label { color: #ea580c; }
+.home-tile--usuarios:hover .home-tile-label { color: #be185d; }
+.home-tile--dashboard:hover .home-tile-label { color: #0e7490; }
 
 @media (max-width: 900px) {
   .home-hub {
