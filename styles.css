@@ -1886,18 +1886,22 @@ th {
 
   .inv-modal-actions,
   .inv-modal-actions-sticky {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 10px;
   }
 
   .inv-modal-actions .btn-salir,
   .inv-modal-actions-sticky .btn-salir {
     margin-left: 0;
-    width: 100%;
+    width: auto;
+    flex: 1 1 0;
   }
 
   .inv-modal-actions-sticky #inv-ver-editar {
-    width: 100%;
+    width: auto;
+    flex: 1 1 0;
   }
 
   .inv-datos-card-modal .inv-datos-titulo {

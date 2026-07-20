@@ -3141,11 +3141,9 @@ function renderInventarios() {
               </table></div>`}
         </div>
         <div class="actions inv-modal-actions inv-modal-actions-sticky">
-          ${normalizarEstadoInventario(invVer) === "cerrado"
-            ? '<button type="button" id="inv-ver-editar">Reabrir / Editar</button>'
-            : normalizarEstadoInventario(invVer) !== "anulado"
-              ? '<button type="button" id="inv-ver-editar">Editar</button>'
-              : '<span class="small">Inventario anulado (solo lectura)</span>'}
+          ${normalizarEstadoInventario(invVer) === "anulado"
+            ? '<span class="small">Inventario anulado (solo lectura)</span>'
+            : '<button type="button" id="inv-ver-editar">Editar</button>'}
           <button type="button" id="inv-ver-cerrar" class="btn-salir">Salir</button>
         </div>
       </div>
