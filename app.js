@@ -3102,38 +3102,45 @@ function renderInventarios() {
     </div>
     ${invVer ? `
     <div class="inv-modal-overlay" id="inv-modal-overlay">
-      <div class="inv-modal card" role="dialog" aria-labelledby="inv-modal-titulo">
-        <h2 id="inv-modal-titulo">${escapeAttr(folioInventario(invVer))}</h2>
-        <fieldset class="inv-modal-fieldset">
-          <legend>Datos del Inventario</legend>
-          <div class="inv-datos-grid">
-            <div><span class="inv-dato-label">Folio</span><span class="inv-dato-valor">${escapeAttr(folioInventario(invVer))}</span></div>
-            <div><span class="inv-dato-label">Usuario</span><span class="inv-dato-valor">${escapeAttr(invVer.nombre || "")}</span></div>
-            <div><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${escapeAttr(invVer.sucursal || byId(state.sucursales, invVer.sucursalId)?.nombre || "—")}</span></div>
-            <div><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${escapeAttr(byId(state.bodegas, invVer.bodegaId)?.nombre || "—")}</span></div>
-            <div><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${escapeAttr(etiquetaFechaHoraInventario(invVer))}</span></div>
-            <div><span class="inv-dato-label">Estado</span><span class="inv-dato-valor">${htmlBadgeEstadoInventario(normalizarEstadoInventario(invVer))}</span></div>
-            ${invVer.observacion
-              ? `<div class="inv-dato-observacion"><span class="inv-dato-label">Observación</span><span class="inv-dato-valor">${escapeAttr(invVer.observacion)}</span></div>`
-              : ""}
+      <div class="inv-modal card inv-modal-shell" role="dialog" aria-labelledby="inv-modal-titulo">
+        <div class="inv-modal-body">
+          <div class="inv-datos-card inv-datos-card-modal">
+            <div class="inv-datos-head">
+              <div class="inv-datos-titulos">
+                <h3 class="inv-datos-titulo" id="inv-modal-titulo">Datos del inventario</h3>
+                <div class="inv-folio-estado-row">
+                  <p class="inv-folio-bajo-titulo">Folio <strong>${escapeAttr(folioInventario(invVer))}</strong>${horaInventario(invVer) ? ` · ${escapeAttr(horaInventario(invVer))}` : ""}</p>
+                  ${htmlBadgeEstadoInventario(normalizarEstadoInventario(invVer))}
+                </div>
+              </div>
+            </div>
+            <div class="inv-datos-resumen">
+              <div class="inv-dato-fecha"><span class="inv-dato-label">Fecha</span><span class="inv-dato-valor">${escapeAttr(invVer.fecha || "—")}</span></div>
+              <div class="inv-dato-usuario"><span class="inv-dato-label">Usuario</span><span class="inv-dato-valor">${escapeAttr(invVer.nombre || "—")}</span></div>
+              <div class="inv-dato-sucursal"><span class="inv-dato-label">Sucursal</span><span class="inv-dato-valor">${escapeAttr(invVer.sucursal || byId(state.sucursales, invVer.sucursalId)?.nombre || "—")}</span></div>
+              <div class="inv-dato-bodega"><span class="inv-dato-label">Bodega</span><span class="inv-dato-valor">${escapeAttr(byId(state.bodegas, invVer.bodegaId)?.nombre || "—")}</span></div>
+              ${invVer.observacion
+                ? `<div class="inv-dato-observacion"><span class="inv-dato-label">Observación</span><span class="inv-dato-valor">${escapeAttr(invVer.observacion)}</span></div>`
+                : ""}
+            </div>
           </div>
-        </fieldset>
-        <h4 style="margin-top:16px;">Movimientos ingresados</h4>
-        ${detallesVer.length === 0
-          ? '<p class="empty-state">Sin movimientos ingresados en este inventario.</p>'
-          : `<div class="table-scroll"><table class="inv-detalle-table">
-              <thead>
-                <tr><th>Nombre</th><th>Cantidad</th><th>U. de Med.</th><th>Stock</th></tr>
-              </thead>
-              <tbody>
-                ${detallesVer.map((d) => {
-                  const prod = byId(state.productos, d.productoId);
-                  const unidad = d.unidad || prod?.unidad || "";
-                  return `<tr><td>${prod?.nombre || d.productoId}</td><td>${d.cantidad}</td><td>${unidad}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td></tr>`;
-                }).join("")}
-              </tbody>
-            </table></div>`}
-        <div class="actions inv-modal-actions">
+          <h4 class="inv-modal-movimientos-titulo">Movimientos ingresados</h4>
+          ${detallesVer.length === 0
+            ? '<p class="empty-state">Sin movimientos ingresados en este inventario.</p>'
+            : `<div class="table-scroll"><table class="inv-detalle-table">
+                <thead>
+                  <tr><th>Nombre</th><th>Cantidad</th><th>U. de Med.</th><th>Stock</th></tr>
+                </thead>
+                <tbody>
+                  ${detallesVer.map((d) => {
+                    const prod = byId(state.productos, d.productoId);
+                    const unidad = d.unidad || prod?.unidad || "";
+                    return `<tr><td>${prod?.nombre || d.productoId}</td><td>${d.cantidad}</td><td>${unidad}</td><td>${prod ? calcularStockVisible(prod) : "—"}</td></tr>`;
+                  }).join("")}
+                </tbody>
+              </table></div>`}
+        </div>
+        <div class="actions inv-modal-actions inv-modal-actions-sticky">
           ${normalizarEstadoInventario(invVer) === "cerrado"
             ? '<button type="button" id="inv-ver-editar">Reabrir / Editar</button>'
             : normalizarEstadoInventario(invVer) !== "anulado"

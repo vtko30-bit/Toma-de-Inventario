@@ -1146,9 +1146,45 @@ th {
 .inv-modal {
   width: min(1100px, 96vw);
   max-height: 92vh;
-  overflow-y: auto;
   margin: 0;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.inv-modal-shell {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.inv-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 16px;
+}
+
+.inv-datos-card-modal {
+  margin-bottom: 14px;
+  box-shadow: none;
+}
+
+.inv-folio-estado-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.inv-folio-estado-row .inv-folio-bajo-titulo {
+  margin: 0;
+}
+
+.inv-modal-movimientos-titulo {
+  margin: 0 0 10px;
+  font-size: 1rem;
 }
 
 .inv-modal-actions {
@@ -1160,6 +1196,15 @@ th {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid #e5e7eb;
+}
+
+.inv-modal-actions-sticky {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.08);
 }
 
 .inv-modal-actions .btn-salir {
@@ -1830,23 +1875,66 @@ th {
 
   .inv-modal {
     width: 100%;
-    max-height: 90vh;
-    border-radius: 12px;
+    max-height: min(92vh, 100%);
+    border-radius: 12px 12px 0 0;
   }
 
   .inv-modal-overlay {
-    padding: 10px;
+    padding: 0;
     align-items: flex-end;
   }
 
-  .inv-modal-actions {
+  .inv-modal-actions,
+  .inv-modal-actions-sticky {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .inv-modal-actions .btn-salir {
+  .inv-modal-actions .btn-salir,
+  .inv-modal-actions-sticky .btn-salir {
     margin-left: 0;
     width: 100%;
+  }
+
+  .inv-modal-actions-sticky #inv-ver-editar {
+    width: 100%;
+  }
+
+  .inv-datos-card-modal .inv-datos-titulo {
+    display: none;
+  }
+
+  .inv-datos-card-modal .inv-datos-head {
+    margin-bottom: 8px;
+  }
+
+  .inv-datos-card-modal .inv-folio-bajo-titulo {
+    margin-top: 0;
+  }
+
+  .inv-datos-card-modal .inv-datos-resumen {
+    grid-template-columns: 1fr 1fr auto;
+    align-items: end;
+  }
+
+  .inv-datos-card-modal .inv-dato-fecha {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .inv-datos-card-modal .inv-dato-usuario {
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .inv-datos-card-modal .inv-dato-sucursal {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .inv-datos-card-modal .inv-dato-bodega {
+    grid-column: 2 / -1;
+    grid-row: 2;
   }
 
   #view-inventarios .inv-lista-scroll {
