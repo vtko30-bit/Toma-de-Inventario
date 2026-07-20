@@ -3033,8 +3033,7 @@ function renderInventarios() {
     <div class="inv-vista-head">
       <h2 class="inv-vista-titulo">Toma de Inventario</h2>
     </div>
-    <div class="card">
-      <h3 style="margin:0 0 12px;">Filtros</h3>
+    <div class="card inv-filtros-card">
       <div class="grid inv-lista-filtros">
         <label>Fecha<input type="date" id="f-fecha" value="${_invListaFilter.fecha}" /></label>
         <label>Bodega

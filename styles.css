@@ -528,9 +528,19 @@ th {
   background: transparent;
 }
 
+.inv-filtros-card {
+  padding: 12px 14px;
+}
+
 .inv-lista-filtros {
-  grid-template-columns: minmax(9rem, 0.9fr) minmax(10rem, 1.2fr) minmax(11rem, 1.2fr) auto;
+  grid-template-columns: minmax(8rem, 0.85fr) minmax(10rem, 1.2fr) minmax(11rem, 1.2fr) auto;
   align-items: end;
+  gap: 10px 12px;
+}
+
+.inv-lista-filtros > label {
+  margin: 0;
+  min-width: 0;
 }
 
 .inv-filtros-accion {
@@ -540,7 +550,8 @@ th {
 }
 
 .inv-filtros-accion .btn-nuevo-inventario {
-  width: 100%;
+  width: auto;
+  white-space: nowrap;
 }
 
 #view-inventarios input,
@@ -1748,7 +1759,11 @@ th {
   }
 
   .inv-lista-filtros {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .inv-filtros-accion {
+    grid-column: 1 / -1;
   }
 
   .inv-filtros-accion .btn-nuevo-inventario {
