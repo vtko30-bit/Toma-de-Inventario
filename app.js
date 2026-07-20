@@ -968,14 +968,6 @@ const HOME_MENU_SVGS = {
       <path d="M34 18h24l8 8H34Z" fill="#c4b5fd" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round"/>
       <path d="M38 52h44M38 64h30" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round"/>
     </svg>`,
-  recetas: `
-    <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <ellipse cx="60" cy="72" rx="34" ry="10" fill="#fed7aa" stroke="#ea580c" stroke-width="3"/>
-      <path d="M26 72c0-22 15-40 34-40s34 18 34 40" fill="#ffedd5" stroke="#ea580c" stroke-width="3"/>
-      <path d="M60 22v12M48 28c4 4 8 6 12 6s8-2 12-6" fill="none" stroke="#c2410c" stroke-width="3" stroke-linecap="round"/>
-      <circle cx="48" cy="58" r="4" fill="#fb923c"/>
-      <circle cx="68" cy="52" r="5" fill="#ea580c"/>
-    </svg>`,
   usuarios: `
     <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
       <circle cx="60" cy="30" r="14" fill="#fce7f3" stroke="#be185d" stroke-width="3"/>
@@ -984,26 +976,18 @@ const HOME_MENU_SVGS = {
       <path d="M12 78c2-12 10-18 16-18" fill="none" stroke="#be185d" stroke-width="2.5" stroke-linecap="round"/>
       <circle cx="92" cy="38" r="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2.5"/>
       <path d="M108 78c-2-12-10-18-16-18" fill="none" stroke="#be185d" stroke-width="2.5" stroke-linecap="round"/>
-    </svg>`,
-  dashboard: `
-    <svg class="home-draw" viewBox="0 0 120 100" aria-hidden="true">
-      <rect x="16" y="16" width="88" height="68" rx="10" fill="#cffafe" stroke="#0e7490" stroke-width="3"/>
-      <path d="M30 66V48M48 66V36M66 66V52M84 66V28" stroke="#0e7490" stroke-width="6" stroke-linecap="round"/>
-      <path d="M28 40l18-10 18 8 20-16" fill="none" stroke="#06b6d4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`
 };
 
 const HOME_MENU_ITEMS = [
+  { id: "movimientos", label: "Movimientos", access: "user" },
   { id: "inventarios", label: "Toma de Inventario", access: "all" },
   { id: "productos", label: "Productos", access: "user" },
-  { id: "movimientos", label: "Movimientos", access: "user" },
-  { id: "bodegas", label: "Bodegas", access: "admin" },
-  { id: "sucursales", label: "Sucursales", access: "admin" },
   { id: "familias", label: "Familias", access: "admin" },
   { id: "categorias", label: "Categorías", access: "admin" },
-  { id: "recetas", label: "Recetas", access: "admin" },
-  { id: "usuarios", label: "Usuarios", access: "admin" },
-  { id: "dashboard", label: "Dashboard", access: "user" }
+  { id: "sucursales", label: "Sucursales", access: "admin" },
+  { id: "bodegas", label: "Bodegas", access: "admin" },
+  { id: "usuarios", label: "Usuarios", access: "admin" }
 ];
 
 function itemsMenuInicioVisibles() {

@@ -36,10 +36,7 @@ body {
   margin: 0;
   font-family: var(--font-body);
   color: var(--ink);
-  background:
-    radial-gradient(ellipse 90% 55% at 8% -15%, rgba(15, 118, 110, 0.1), transparent 55%),
-    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(71, 85, 105, 0.07), transparent 50%),
-    linear-gradient(165deg, #f3f6f4 0%, #eef1f5 52%, #f1f4f2 100%);
+  background: #ffffff;
   background-attachment: fixed;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -293,9 +290,7 @@ button:active {
 .home-hub {
   min-height: calc(100vh - 120px);
   padding: 8px 4px 28px;
-  background:
-    radial-gradient(ellipse 70% 50% at 8% 0%, rgba(45, 212, 191, 0.18), transparent 55%),
-    radial-gradient(ellipse 55% 40% at 100% 20%, rgba(15, 118, 110, 0.1), transparent 50%);
+  background: #ffffff;
   border-radius: var(--radius-lg);
 }
 
@@ -394,9 +389,7 @@ button:active {
 .home-tile--sucursales:hover .home-tile-label { color: #4338ca; }
 .home-tile--familias:hover .home-tile-label { color: #4d7c0f; }
 .home-tile--categorias:hover .home-tile-label { color: #7c3aed; }
-.home-tile--recetas:hover .home-tile-label { color: #ea580c; }
 .home-tile--usuarios:hover .home-tile-label { color: #be185d; }
-.home-tile--dashboard:hover .home-tile-label { color: #0e7490; }
 
 @media (max-width: 900px) {
   .home-hub {
