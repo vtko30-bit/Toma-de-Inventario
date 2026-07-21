@@ -136,7 +136,7 @@ La pantalla de inicio muestra **Continuar con Google** cuando Supabase está act
 3. En Supabase → **Authentication → Users** debe aparecer el usuario.
 4. En la tabla `usuarios` debe existir el perfil (nombre desde Google).
 
-> **Nota:** un usuario Google nuevo sin perfil previo crea su propio tenant como admin. Para que empleados entren al tenant de la empresa, un admin debe gestionarlos en **Usuarios** (o crear el perfil antes con el mismo `tenant_id`).
+> **Nota:** un usuario Google nuevo sin perfil previo crea su propio tenant como admin (a menudo un código derivado del correo). En **Usuarios** puedes cambiar el **nombre de empresa** a uno legible. Antes debes ejecutar una vez en Supabase SQL Editor el archivo `supabase-rename-tenant.sql`.
 
 ## Instalación como app
 

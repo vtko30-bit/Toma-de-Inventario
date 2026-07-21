@@ -144,7 +144,45 @@ const Auth = {
   },
 
   _toTenant(value) {
-    return (value || "").toLowerCase().replace(/[^a-z0-9]/g, "_") || "default";
+    return (value || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "default";
+  },
+
+  async renameEmpresa(nuevoNombre) {
+    if (!window.SUPABASE_ENABLED) {
+      throw new Error("Solo disponible en modo nube.");
+    }
+    if (!this.isAdmin()) {
+      throw new Error("Solo un administrador puede cambiar el nombre de empresa.");
+    }
+    const oldId = this.currentUser?.tenantId;
+    const newId = this._toTenant(nuevoNombre);
+    if (!oldId) throw new Error("No hay empresa activa.");
+    if (!newId || newId.length < 2) {
+      throw new Error("Indica un nombre de empresa válido (mínimo 2 caracteres útiles).");
+    }
+    if (oldId === newId) {
+      return { oldId, newId, unchanged: true };
+    }
+    const { supabase } = window.__SB__ || {};
+    if (!supabase) throw new Error("Supabase no está listo.");
+
+    const { error } = await supabase.rpc("rename_tenant", {
+      p_old: oldId,
+      p_new: newId
+    });
+    if (error) {
+      const msg = error.message || "";
+      if (/rename_tenant|Could not find the function|PGRST202/i.test(msg) || error.code === "PGRST202") {
+        throw new Error(
+          "Falta ejecutar en Supabase el script supabase-rename-tenant.sql (SQL Editor). Luego vuelve a intentar."
+        );
+      }
+      throw new Error(msg || "No se pudo cambiar el nombre de empresa.");
+    }
+
+    this.currentUser = { ...this.currentUser, tenantId: newId };
+    this._emit();
+    return { oldId, newId, unchanged: false };
   },
 
   async register({ email, password, nombre, empresa }) {

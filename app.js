@@ -4021,20 +4021,34 @@ async function renderUsuariosSupabase(el) {
 
   const appUrl = window.location.origin + window.location.pathname;
   const mensajeInvitacion = `Únete a mi inventario en ${appUrl}\nRegístrate con el nombre de empresa: ${tenantActual}`;
+  const slugPreview = window.Auth?._toTenant?.(tenantActual) || tenantActual;
 
   el.innerHTML = `
+    <div class="card">
+      <h2>Nombre de empresa</h2>
+      <p class="small">Al entrar con Google se generó un código automático. Puedes cambiarlo a un nombre legible (ej. <em>Mi Bodega</em>). Quedará como código: <code id="empresa-slug-preview">${escapeAttr(slugPreview)}</code></p>
+      <div class="grid">
+        <label>Nombre de empresa
+          <input id="empresa-nombre-edit" value="${escapeAttr(tenantActual)}" autocomplete="organization" />
+        </label>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-guardar-empresa">Guardar nombre de empresa</button>
+      </div>
+    </div>
+
     <div class="card">
       <h2>Invitar nuevo usuario</h2>
       <p>Por seguridad de Supabase, los usuarios nuevos deben <strong>registrarse ellos mismos</strong>. Sigue estos pasos:</p>
       <ol style="line-height:1.8;">
-        <li>Comparte el enlace de la app y el nombre de tu empresa: <strong>${tenantActual}</strong></li>
+        <li>Comparte el enlace de la app y el nombre de tu empresa: <strong id="inv-tenant-label">${escapeAttr(tenantActual)}</strong></li>
         <li>La otra persona entra al enlace y presiona <em>Crear cuenta</em></li>
         <li>Se registra con su correo, contraseña y exactamente ese mismo nombre de empresa</li>
         <li>Una vez registrada, vuelve aquí y asígnale el rol: <em>admin</em>, <em>usuario</em> o <em>solo inventario</em> (solo Toma de Inventario)</li>
       </ol>
       <div class="grid">
-        <label>URL de la app<input id="inv-url" value="${appUrl}" readonly /></label>
-        <label>Nombre de empresa<input id="inv-tenant" value="${tenantActual}" readonly /></label>
+        <label>URL de la app<input id="inv-url" value="${escapeAttr(appUrl)}" readonly /></label>
+        <label>Nombre de empresa<input id="inv-tenant" value="${escapeAttr(tenantActual)}" readonly /></label>
       </div>
       <div class="actions">
         <button id="btn-copiar-invitacion">Copiar invitación al portapapeles</button>
@@ -4044,7 +4058,7 @@ async function renderUsuariosSupabase(el) {
 
     <div class="card">
       <h2>Usuarios de la empresa (${users?.length || 0})</h2>
-      <p class="small">Empresa: <strong>${tenantActual}</strong></p>
+      <p class="small">Empresa: <strong id="usuarios-empresa-label">${escapeAttr(tenantActual)}</strong></p>
       ${(!users || users.length === 0)
         ? '<p class="empty-state">Aún no hay usuarios registrados.</p>'
         : `<table>
@@ -4069,6 +4083,43 @@ async function renderUsuariosSupabase(el) {
             </tbody>
           </table>`}
     </div>`;
+
+  const nombreEdit = document.getElementById("empresa-nombre-edit");
+  const slugEl = document.getElementById("empresa-slug-preview");
+  nombreEdit?.addEventListener("input", () => {
+    if (slugEl && window.Auth?._toTenant) {
+      slugEl.textContent = window.Auth._toTenant(nombreEdit.value);
+    }
+  });
+
+  document.getElementById("btn-guardar-empresa")?.addEventListener("click", async () => {
+    const nombre = document.getElementById("empresa-nombre-edit")?.value?.trim() || "";
+    const nuevoSlug = window.Auth._toTenant(nombre);
+    if (!nombre) {
+      toast("Escribe un nombre de empresa", "warn");
+      return;
+    }
+    if (!confirmar(`¿Cambiar el nombre de empresa a "${nombre}"?\nCódigo interno: ${nuevoSlug}\n\nSe actualizarán usuarios y datos de la empresa.`)) {
+      return;
+    }
+    const btn = document.getElementById("btn-guardar-empresa");
+    if (btn) btn.disabled = true;
+    try {
+      const res = await window.Auth.renameEmpresa(nombre);
+      if (res.unchanged) {
+        toast("El nombre ya estaba aplicado", "success");
+      } else {
+        toast("Nombre de empresa actualizado", "success");
+        await window.DataLayer.load(res.newId);
+        renderUsuarios();
+      }
+    } catch (e) {
+      console.error(e);
+      toast(e.message || "No se pudo cambiar el nombre", "error", 8000);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
 
   document.getElementById("btn-copiar-invitacion").addEventListener("click", async () => {
     try {
