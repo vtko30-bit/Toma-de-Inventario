@@ -4056,16 +4056,6 @@ async function renderUsuariosSupabase(el) {
     `Abre el enlace, crea tu cuenta (o entra con Google). Si ya te registraste, avisa al admin para que pulse Vincular.`;
   const slugPreview = window.Auth?._toTenant?.(tenantActual) || tenantActual;
 
-  function abrirMailto(to, subject, body) {
-    const url = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-
   el.innerHTML = `
     <div class="card">
       <h2>Nombre de empresa</h2>
@@ -4082,7 +4072,7 @@ async function renderUsuariosSupabase(el) {
 
     <div class="card">
       <h2>Invitar / vincular usuario</h2>
-      <p>Escribe el correo del invitado. Se guarda la invitación en tu empresa. Si <strong>ya se registró</strong> pero no aparece aquí, pulsa <em>Vincular a mi empresa</em>.</p>
+      <p>Escribe el correo. <strong>Guardar invitación</strong> la deja pendiente y copia el mensaje para que lo pegues en tu correo. Si la persona <strong>ya tiene cuenta</strong>, usa <em>Vincular a mi empresa</em>.</p>
       <div class="grid">
         <label>Correo a invitar
           <input type="email" id="inv-email" placeholder="persona@correo.com" autocomplete="email" />
@@ -4098,7 +4088,7 @@ async function renderUsuariosSupabase(el) {
         <label>Enlace de registro<input id="inv-url" value="${escapeAttr(joinUrl)}" readonly /></label>
       </div>
       <div class="actions">
-        <button type="button" id="btn-enviar-invitacion">Guardar e invitar</button>
+        <button type="button" id="btn-enviar-invitacion">Guardar invitación</button>
         <button type="button" id="btn-vincular-invitado">Vincular a mi empresa</button>
         <button type="button" id="btn-copiar-invitacion" class="btn-link">Copiar invitación</button>
       </div>
@@ -4244,7 +4234,12 @@ async function renderUsuariosSupabase(el) {
     const btn = document.getElementById("btn-enviar-invitacion");
     if (btn) btn.disabled = true;
     const invitador = window.Auth?.currentUser?.nombre || window.Auth?.currentUser?.email || "";
-    const hint = document.getElementById("inv-mailto-hint");
+    const cuerpo =
+      `Te invitaron a Control de Inventario.\n\n` +
+      (invitador ? `Quién invita: ${invitador}\n` : "") +
+      `Enlace: ${joinUrl}\n` +
+      `Nombre de empresa: ${tenantActual}\n\n` +
+      `Abre el enlace y crea tu cuenta (o entra con Google con este mismo correo).`;
 
     try {
       await window.Auth.crearInvitacion(to, rol);
@@ -4257,53 +4252,44 @@ async function renderUsuariosSupabase(el) {
 
     // Si ya tiene cuenta, vincular de una vez
     try {
-      await vincularCorreo(to);
-      toast(`Invitación lista y usuario vinculado: ${to}`, "success", 7000);
+      await window.Auth.vincularInvitado(to);
+      toast(`Invitación guardada y ${to} ya quedó en tu empresa`, "success", 7000);
       renderUsuarios();
-      if (btn) btn.disabled = false;
       return;
     } catch (_) {
-      // aún no registrado: seguir con correo
+      // aún no registrado
     }
 
-    let enviado = false;
+    // Intentar envío automático (Resend); si no está configurado, copiar (lo que sí funciona)
+    let enviadoMail = false;
     try {
       if (supabase?.functions?.invoke) {
         const { data, error } = await supabase.functions.invoke("enviar-invitacion", {
-          body: {
-            to,
-            appUrl: joinUrl,
-            tenantId: tenantActual,
-            invitador
-          }
+          body: { to, appUrl: joinUrl, tenantId: tenantActual, invitador }
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
-        enviado = true;
-        toast(`Invitación guardada y enviada a ${to}`, "success", 6000);
+        enviadoMail = true;
       }
     } catch (e) {
       console.warn("Envío automático de invitación falló:", e);
     }
 
-    if (!enviado) {
-      const cuerpo =
-        `Te invitaron a Control de Inventario.\n\n` +
-        (invitador ? `Quién invita: ${invitador}\n` : "") +
-        `Enlace: ${joinUrl}\n` +
-        `Nombre de empresa: ${tenantActual}\n\n` +
-        `Abre el enlace y crea tu cuenta (o entra con Google con este mismo correo).`;
-      abrirMailto(to, "Invitación a Control de Inventario", cuerpo);
-      if (hint) {
-        hint.hidden = false;
-        hint.textContent =
-          "Si no se abrió tu correo, usa Copiar invitación y pégala en un mensaje. La invitación ya quedó guardada: cuando esa persona entre, o cuando pulses Vincular, se unirá a tu empresa.";
-      }
-      toast("Invitación guardada. Si el correo no se abrió, copia la invitación.", "warn", 8000);
+    let copiado = false;
+    try {
+      await navigator.clipboard.writeText(cuerpo);
+      copiado = true;
+    } catch (_) { /* ignore */ }
+
+    if (enviadoMail) {
+      toast(`Invitación guardada y enviada a ${to}`, "success", 7000);
+    } else if (copiado) {
+      toast(`Invitación guardada y copiada. Pégala en un correo a ${to}`, "success", 8000);
+    } else {
+      toast("Invitación guardada. Usa Copiar invitación y envíala desde tu correo.", "warn", 8000);
     }
 
     renderUsuarios();
-    if (btn) btn.disabled = false;
   });
 
   document.getElementById("btn-copiar-invitacion")?.addEventListener("click", async () => {
