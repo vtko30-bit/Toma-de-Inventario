@@ -60,6 +60,7 @@ inventario-app/
    - Realtime habilitado en las tablas.
 5. En **Authentication → Providers** verifica que **Email** esté habilitado.
    - Si no quieres que los usuarios deban confirmar el correo para probar, en **Authentication → Settings** desactiva "Confirm email".
+6. (Opcional pero recomendado) Habilita **Google** siguiendo la sección [Login con Google](#login-con-google-oauth) más abajo.
 
 ### 2. Pegar credenciales
 
@@ -94,6 +95,48 @@ git push -u origin main
 4. Vercel asigna una URL pública con HTTPS — listo para PWA.
 
 > Cualquier `git push` a `main` despliega automáticamente en Vercel.
+
+## Login con Google (OAuth)
+
+La pantalla de inicio muestra **Continuar con Google** cuando Supabase está activo. El usuario es redirigido a Google y vuelve a la app; si no existe fila en `usuarios`, se crea como `admin` con `tenant_id` derivado del correo (igual que el auto-perfil actual).
+
+### 1. Google Cloud Console
+
+1. Entra a [Google Cloud Console](https://console.cloud.google.com/) → crea o elige un proyecto.
+2. **APIs & Services → OAuth consent screen**: configura la pantalla de consentimiento (External o Internal).
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
+   - Application type: **Web application**
+   - **Authorized JavaScript origins** (ejemplos):
+     - `https://toma-de-inventario.vercel.app`
+     - `http://localhost:5500` (o el puerto que uses en local)
+   - **Authorized redirect URIs** (obligatorio, el de Supabase):
+     - `https://vwoqjbyyxcrbcqrjiksk.supabase.co/auth/v1/callback`
+     - (Si cambias de proyecto Supabase, usa `https://<project-ref>.supabase.co/auth/v1/callback`)
+4. Copia el **Client ID** y el **Client Secret**.
+
+### 2. Supabase — Provider Google
+
+1. Dashboard → **Authentication → Providers → Google**.
+2. Activa **Enable Sign in with Google**.
+3. Pega Client ID y Client Secret → **Save**.
+
+### 3. Supabase — URLs
+
+1. **Authentication → URL Configuration**:
+   - **Site URL**: `https://toma-de-inventario.vercel.app` (producción).
+   - **Redirect URLs**: incluye al menos:
+     - `https://toma-de-inventario.vercel.app`
+     - `https://toma-de-inventario.vercel.app/**`
+     - tu URL local si pruebas en local (`http://localhost:5500` o similar)
+
+### 4. Probar
+
+1. Abre la app → **Continuar con Google**.
+2. Elige una cuenta Google.
+3. En Supabase → **Authentication → Users** debe aparecer el usuario.
+4. En la tabla `usuarios` debe existir el perfil (nombre desde Google).
+
+> **Nota:** un usuario Google nuevo sin perfil previo crea su propio tenant como admin. Para que empleados entren al tenant de la empresa, un admin debe gestionarlos en **Usuarios** (o crear el perfil antes con el mismo `tenant_id`).
 
 ## Instalación como app
 

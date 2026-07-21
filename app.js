@@ -3818,6 +3818,10 @@ function setupAuthUI() {
     : "Modo local — los usuarios se guardan en este dispositivo";
   modeLabel.style.display = modeLabel.textContent ? "" : "none";
 
+  const googleWrap = document.getElementById("auth-google-wrap");
+  const googleBtn = document.getElementById("auth-google");
+  if (googleWrap) googleWrap.hidden = !window.SUPABASE_ENABLED;
+
   let modoRegistro = false;
 
   function aplicarModo() {
@@ -3826,6 +3830,7 @@ function setupAuthUI() {
     toggle.textContent = modoRegistro ? "Ya tengo cuenta" : "Crear cuenta";
     fieldsRegister.style.display = modoRegistro ? "block" : "none";
     errorEl.textContent = "";
+    if (googleWrap) googleWrap.hidden = !window.SUPABASE_ENABLED || modoRegistro;
   }
 
   toggle.addEventListener("click", () => {
@@ -3837,6 +3842,26 @@ function setupAuthUI() {
     submit.disabled = false;
     submit.textContent = modoRegistro ? "Registrarme" : "Entrar";
   }
+
+  googleBtn?.addEventListener("click", async () => {
+    errorEl.textContent = "";
+    if (!window.SUPABASE_ENABLED) {
+      errorEl.textContent = "Google solo está disponible con Supabase configurado.";
+      return;
+    }
+    googleBtn.disabled = true;
+    const label = googleBtn.innerHTML;
+    googleBtn.textContent = "Conectando con Google…";
+    try {
+      await window.Auth.loginWithGoogle();
+    } catch (e) {
+      console.error("Google auth error:", e);
+      errorEl.textContent = e.message || "No se pudo iniciar sesión con Google.";
+      toast(e.message || "Error con Google", "error");
+      googleBtn.disabled = false;
+      googleBtn.innerHTML = label;
+    }
+  });
 
   const form = document.getElementById("auth-form");
   form.addEventListener("submit", async (ev) => {

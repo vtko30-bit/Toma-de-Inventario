@@ -635,6 +635,60 @@ th {
   color: var(--primary-hover);
 }
 
+.auth-google-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.btn-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: #fff;
+  color: #3c4043;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.btn-google:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #1f2937;
+  opacity: 1;
+}
+
+.btn-google:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.btn-google-icon {
+  flex-shrink: 0;
+}
+
 .inv-estado-badge {
   display: inline-block;
   padding: 3px 10px;

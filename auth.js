@@ -80,6 +80,8 @@ const Auth = {
     if (!profile) {
       const meta = authUser.user_metadata || {};
       const tenantFromMeta = meta.tenant_id || this._toTenant(meta.empresa || authUser.email);
+      const nombreGoogle =
+        meta.full_name || meta.name || meta.nombre || authUser.email;
       try {
         const { data: inserted, error: insertError } = await withTimeout(
           supabase
@@ -88,7 +90,7 @@ const Auth = {
               {
                 id: authUser.id,
                 email: authUser.email,
-                nombre: meta.nombre || authUser.email,
+                nombre: nombreGoogle,
                 tenant_id: tenantFromMeta,
                 role: "admin"
               },
@@ -109,10 +111,15 @@ const Auth = {
       }
     }
 
+    const metaNombre =
+      authUser.user_metadata?.full_name ||
+      authUser.user_metadata?.name ||
+      authUser.user_metadata?.nombre;
+
     this.currentUser = {
       uid: authUser.id,
       email: authUser.email,
-      nombre: profile?.nombre || authUser.email,
+      nombre: profile?.nombre || metaNombre || authUser.email,
       tenantId: profile?.tenant_id || (authUser.user_metadata?.tenant_id) || authUser.id,
       role: profile?.role || "admin"
     };
@@ -208,6 +215,31 @@ const Auth = {
     localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(this.currentUser));
     this._emit();
     return this.currentUser;
+  },
+
+  async loginWithGoogle() {
+    if (!window.SUPABASE_ENABLED) {
+      throw new Error("El inicio con Google solo está disponible en modo nube (Supabase).");
+    }
+    const { supabase } = window.__SB__ || {};
+    if (!supabase) {
+      throw new Error("Supabase aún no está listo. Recarga e inténtalo de nuevo.");
+    }
+    const redirectTo = `${window.location.origin}${window.location.pathname || "/"}`;
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: "offline",
+          prompt: "select_account"
+        }
+      }
+    });
+    if (error) {
+      throw new Error(error.message || "No se pudo iniciar sesión con Google.");
+    }
+    return data;
   },
 
   async logout() {
