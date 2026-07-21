@@ -151,8 +151,9 @@ La pantalla de inicio muestra **Continuar con Google** cuando Supabase está act
 - Al registrarse, el usuario indica el **nombre de su empresa**. Internamente se genera un `tenant_id` único por empresa.
 - El primer usuario que se registra para una empresa queda como `admin`.
 - Para sumar usuarios a la misma empresa, deben registrarse usando exactamente el **mismo nombre de empresa**.
-- Desde la sección **Usuarios** (visible solo para admins), puedes enviar una invitación por correo, copiar el mensaje, y cambiar el rol de los demás integrantes.
-- **Invitación por correo:** con la Edge Function `enviar-invitacion` desplegada (mismos secrets Resend que el Excel), el envío es automático. Si no está desplegada, se abre tu cliente de correo con el destinatario y el mensaje listos.
+- Desde la sección **Usuarios** (visible solo para admins), puedes enviar una invitación por correo, **vincular** a alguien que ya se registró, copiar el mensaje, y cambiar el rol de los demás integrantes.
+- **Importante:** ejecuta una vez `supabase-invitaciones.sql` en el SQL Editor de Supabase. Sin eso, el invitado puede crear su propia empresa y no aparecerá en tu lista.
+- **Invitación por correo:** con la Edge Function `enviar-invitacion` desplegada (mismos secrets Resend que el Excel), el envío es automático. Si no está desplegada, puedes copiar la invitación.
 - Las políticas RLS de Supabase garantizan que un tenant nunca pueda leer/modificar datos de otro.
 
 ## Envío Excel a administradores (al cerrar inventario)

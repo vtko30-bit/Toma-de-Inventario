@@ -65,6 +65,17 @@ const Auth = {
       return;
     }
     const { supabase } = window.__SB__;
+
+    // Si hay invitación pendiente para este correo, mueve al tenant correcto
+    try {
+      await withTimeout(supabase.rpc("aplicar_invitacion"), 5000, "aplicar invitacion");
+    } catch (e) {
+      // Función aún no desplegada o sin invitación: continuar
+      if (!/Could not find the function|PGRST202|sin_invitacion/i.test(String(e?.message || e))) {
+        console.warn("aplicar_invitacion:", e);
+      }
+    }
+
     let profile = null;
     try {
       const res = await withTimeout(
@@ -185,6 +196,50 @@ const Auth = {
     return { oldId, newId, unchanged: false };
   },
 
+  async crearInvitacion(email, role = "usuario") {
+    if (!window.SUPABASE_ENABLED) throw new Error("Solo disponible en modo nube.");
+    if (!this.isAdmin()) throw new Error("Solo un administrador puede invitar.");
+    const { supabase } = window.__SB__ || {};
+    if (!supabase) throw new Error("Supabase no está listo.");
+    const { data, error } = await supabase.rpc("crear_invitacion", {
+      p_email: String(email || "").trim().toLowerCase(),
+      p_role: role || "usuario"
+    });
+    if (error) {
+      const msg = error.message || "";
+      if (/crear_invitacion|Could not find the function|PGRST202/i.test(msg) || error.code === "PGRST202") {
+        throw new Error(
+          "Falta ejecutar en Supabase el script supabase-invitaciones.sql (SQL Editor)."
+        );
+      }
+      throw new Error(msg || "No se pudo crear la invitación.");
+    }
+    return data;
+  },
+
+  async vincularInvitado(email) {
+    if (!window.SUPABASE_ENABLED) throw new Error("Solo disponible en modo nube.");
+    if (!this.isAdmin()) throw new Error("Solo un administrador puede vincular.");
+    const { supabase } = window.__SB__ || {};
+    if (!supabase) throw new Error("Supabase no está listo.");
+    const { data, error } = await supabase.rpc("vincular_invitado", {
+      p_email: String(email || "").trim().toLowerCase()
+    });
+    if (error) {
+      const msg = error.message || "";
+      if (/vincular_invitado|Could not find the function|PGRST202/i.test(msg) || error.code === "PGRST202") {
+        throw new Error(
+          "Falta ejecutar en Supabase el script supabase-invitaciones.sql (SQL Editor)."
+        );
+      }
+      throw new Error(msg || "No se pudo vincular al usuario.");
+    }
+    if (data && data.ok === false) {
+      throw new Error(data.message || data.reason || "No se pudo vincular.");
+    }
+    return data;
+  },
+
   async register({ email, password, nombre, empresa }) {
     if (window.SUPABASE_ENABLED) {
       const { supabase } = window.__SB__;
@@ -199,14 +254,23 @@ const Auth = {
       if (error) throw error;
       const userId = data.user?.id;
       if (userId) {
-        const { error: insertError } = await supabase.from("usuarios").upsert({
-          id: userId,
-          email,
-          nombre: nombre || email,
-          tenant_id: tenantId,
-          role: "admin"
-        });
-        if (insertError && insertError.code !== "23505") throw insertError;
+        // Preferir invitación pendiente (misma empresa del admin que invitó)
+        let applied = false;
+        try {
+          const { data: inv } = await supabase.rpc("aplicar_invitacion");
+          applied = !!(inv && inv.applied);
+        } catch (_) { /* sin script aún */ }
+
+        if (!applied) {
+          const { error: insertError } = await supabase.from("usuarios").upsert({
+            id: userId,
+            email,
+            nombre: nombre || email,
+            tenant_id: tenantId,
+            role: "admin"
+          });
+          if (insertError && insertError.code !== "23505") throw insertError;
+        }
       }
       return data.user;
     }

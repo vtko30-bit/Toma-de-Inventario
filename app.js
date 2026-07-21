@@ -3824,19 +3824,34 @@ function setupAuthUI() {
 
   let modoRegistro = false;
 
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const empresaParam = params.get("empresa");
+    const quiereRegistro = params.get("registro") === "1";
+    if (empresaParam) {
+      const empresaInput = document.getElementById("auth-empresa");
+      if (empresaInput) empresaInput.value = empresaParam;
+    }
+    if (quiereRegistro || empresaParam) {
+      modoRegistro = true;
+    }
+  } catch (_) { /* ignore */ }
+
   function aplicarModo() {
     titulo.textContent = modoRegistro ? "Crear cuenta" : "Iniciar sesión";
     submit.textContent = modoRegistro ? "Registrarme" : "Entrar";
     toggle.textContent = modoRegistro ? "Ya tengo cuenta" : "Crear cuenta";
     fieldsRegister.style.display = modoRegistro ? "block" : "none";
     errorEl.textContent = "";
-    if (googleWrap) googleWrap.hidden = !window.SUPABASE_ENABLED || modoRegistro;
+    if (googleWrap) googleWrap.hidden = !window.SUPABASE_ENABLED;
   }
 
   toggle.addEventListener("click", () => {
     modoRegistro = !modoRegistro;
     aplicarModo();
   });
+
+  aplicarModo();
 
   function resetSubmitButton() {
     submit.disabled = false;
@@ -4019,9 +4034,37 @@ async function renderUsuariosSupabase(el) {
     .eq("tenant_id", tenantActual)
     .order("email");
 
+  let pendientes = [];
+  try {
+    const { data: invs } = await supabase
+      .from("invitaciones")
+      .select("id,email,role,created_at,accepted_at")
+      .eq("tenant_id", tenantActual)
+      .is("accepted_at", null)
+      .order("created_at", { ascending: false });
+    pendientes = invs || [];
+  } catch (_) {
+    pendientes = [];
+  }
+
   const appUrl = window.location.origin + window.location.pathname;
-  const mensajeInvitacion = `Únete a mi inventario en ${appUrl}\nRegístrate con el nombre de empresa: ${tenantActual}`;
+  const joinUrl = `${appUrl}?empresa=${encodeURIComponent(tenantActual)}&registro=1`;
+  const mensajeInvitacion =
+    `Te invitaron a Control de Inventario.\n` +
+    `Enlace: ${joinUrl}\n` +
+    `Nombre de empresa: ${tenantActual}\n\n` +
+    `Abre el enlace, crea tu cuenta (o entra con Google). Si ya te registraste, avisa al admin para que pulse Vincular.`;
   const slugPreview = window.Auth?._toTenant?.(tenantActual) || tenantActual;
+
+  function abrirMailto(to, subject, body) {
+    const url = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
 
   el.innerHTML = `
     <div class="card">
@@ -4038,21 +4081,47 @@ async function renderUsuariosSupabase(el) {
     </div>
 
     <div class="card">
-      <h2>Invitar nuevo usuario</h2>
-      <p>Escribe el correo y envía la invitación. La otra persona debe <strong>crear su cuenta</strong> con el nombre de empresa <strong id="inv-tenant-label">${escapeAttr(tenantActual)}</strong>. Después puedes asignarle el rol aquí.</p>
+      <h2>Invitar / vincular usuario</h2>
+      <p>Escribe el correo del invitado. Se guarda la invitación en tu empresa. Si <strong>ya se registró</strong> pero no aparece aquí, pulsa <em>Vincular a mi empresa</em>.</p>
       <div class="grid">
         <label>Correo a invitar
           <input type="email" id="inv-email" placeholder="persona@correo.com" autocomplete="email" />
         </label>
+        <label>Rol inicial
+          <select id="inv-rol">
+            <option value="usuario">usuario</option>
+            <option value="inventario">solo inventario</option>
+            <option value="admin">admin</option>
+          </select>
+        </label>
         <label>Nombre de empresa<input id="inv-tenant" value="${escapeAttr(tenantActual)}" readonly /></label>
-        <label>URL de la app<input id="inv-url" value="${escapeAttr(appUrl)}" readonly /></label>
+        <label>Enlace de registro<input id="inv-url" value="${escapeAttr(joinUrl)}" readonly /></label>
       </div>
       <div class="actions">
-        <button type="button" id="btn-enviar-invitacion">Enviar invitación por correo</button>
+        <button type="button" id="btn-enviar-invitacion">Guardar e invitar</button>
+        <button type="button" id="btn-vincular-invitado">Vincular a mi empresa</button>
         <button type="button" id="btn-copiar-invitacion" class="btn-link">Copiar invitación</button>
-        <button type="button" id="btn-abrir-app" class="btn-link">Abrir app en nueva pestaña</button>
       </div>
+      <p class="small" id="inv-mailto-hint" hidden></p>
     </div>
+
+    ${pendientes.length ? `
+    <div class="card">
+      <h2>Invitaciones pendientes (${pendientes.length})</h2>
+      <table>
+        <thead><tr><th>Email</th><th>Rol</th><th>Fecha</th><th></th></tr></thead>
+        <tbody>
+          ${pendientes.map((p) => `
+            <tr>
+              <td>${escapeAttr(p.email)}</td>
+              <td>${escapeAttr(p.role)}</td>
+              <td>${p.created_at ? new Date(p.created_at).toLocaleDateString() : ""}</td>
+              <td><button type="button" class="btn-link btn-vincular-pendiente" data-email="${escapeAttr(p.email)}">Vincular</button></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>` : ""}
 
     <div class="card">
       <h2>Usuarios de la empresa (${users?.length || 0})</h2>
@@ -4119,9 +4188,53 @@ async function renderUsuariosSupabase(el) {
     }
   });
 
+  async function vincularCorreo(to) {
+    const res = await window.Auth.vincularInvitado(to);
+    toast(`Usuario ${to} vinculado a tu empresa`, "success", 6000);
+    return res;
+  }
+
+  document.getElementById("btn-vincular-invitado")?.addEventListener("click", async () => {
+    const emailInput = document.getElementById("inv-email");
+    const to = String(emailInput?.value || "").trim().toLowerCase();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      toast("Escribe el correo de quien ya se registró", "warn");
+      emailInput?.focus();
+      return;
+    }
+    const btn = document.getElementById("btn-vincular-invitado");
+    if (btn) btn.disabled = true;
+    try {
+      await window.Auth.crearInvitacion(to, document.getElementById("inv-rol")?.value || "usuario");
+      await vincularCorreo(to);
+      renderUsuarios();
+    } catch (e) {
+      console.error(e);
+      toast(e.message || "No se pudo vincular", "error", 9000);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el.querySelectorAll(".btn-vincular-pendiente").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const to = btn.dataset.email;
+      btn.disabled = true;
+      try {
+        await vincularCorreo(to);
+        renderUsuarios();
+      } catch (e) {
+        toast(e.message || "No se pudo vincular", "error", 9000);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
   document.getElementById("btn-enviar-invitacion")?.addEventListener("click", async () => {
     const emailInput = document.getElementById("inv-email");
     const to = String(emailInput?.value || "").trim().toLowerCase();
+    const rol = document.getElementById("inv-rol")?.value || "usuario";
     if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
       toast("Escribe un correo válido", "warn");
       emailInput?.focus();
@@ -4131,14 +4244,35 @@ async function renderUsuariosSupabase(el) {
     const btn = document.getElementById("btn-enviar-invitacion");
     if (btn) btn.disabled = true;
     const invitador = window.Auth?.currentUser?.nombre || window.Auth?.currentUser?.email || "";
-    let enviado = false;
+    const hint = document.getElementById("inv-mailto-hint");
 
+    try {
+      await window.Auth.crearInvitacion(to, rol);
+    } catch (e) {
+      console.error(e);
+      toast(e.message || "No se pudo guardar la invitación", "error", 9000);
+      if (btn) btn.disabled = false;
+      return;
+    }
+
+    // Si ya tiene cuenta, vincular de una vez
+    try {
+      await vincularCorreo(to);
+      toast(`Invitación lista y usuario vinculado: ${to}`, "success", 7000);
+      renderUsuarios();
+      if (btn) btn.disabled = false;
+      return;
+    } catch (_) {
+      // aún no registrado: seguir con correo
+    }
+
+    let enviado = false;
     try {
       if (supabase?.functions?.invoke) {
         const { data, error } = await supabase.functions.invoke("enviar-invitacion", {
           body: {
             to,
-            appUrl,
+            appUrl: joinUrl,
             tenantId: tenantActual,
             invitador
           }
@@ -4146,34 +4280,29 @@ async function renderUsuariosSupabase(el) {
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
         enviado = true;
-        toast(`Invitación enviada a ${to}`, "success", 6000);
-        if (emailInput) emailInput.value = "";
+        toast(`Invitación guardada y enviada a ${to}`, "success", 6000);
       }
     } catch (e) {
       console.warn("Envío automático de invitación falló:", e);
     }
 
     if (!enviado) {
-      const asunto = encodeURIComponent("Invitación a Control de Inventario");
-      const cuerpo = encodeURIComponent(
+      const cuerpo =
         `Te invitaron a Control de Inventario.\n\n` +
         (invitador ? `Quién invita: ${invitador}\n` : "") +
-        `Enlace: ${appUrl}\n` +
-        `Nombre de empresa (escríbelo exactamente al crear la cuenta): ${tenantActual}\n\n` +
-        `Pasos:\n` +
-        `1. Abre el enlace\n` +
-        `2. Pulsa Crear cuenta\n` +
-        `3. Usa tu correo y ese mismo nombre de empresa\n` +
-        `4. Un admin te asignará el rol después`
-      );
-      try {
-        window.location.href = `mailto:${to}?subject=${asunto}&body=${cuerpo}`;
-        toast("Se abrió tu correo con la invitación. Pulsa Enviar.", "success", 7000);
-      } catch (_) {
-        toast("No se pudo abrir el correo. Usa Copiar invitación.", "warn");
+        `Enlace: ${joinUrl}\n` +
+        `Nombre de empresa: ${tenantActual}\n\n` +
+        `Abre el enlace y crea tu cuenta (o entra con Google con este mismo correo).`;
+      abrirMailto(to, "Invitación a Control de Inventario", cuerpo);
+      if (hint) {
+        hint.hidden = false;
+        hint.textContent =
+          "Si no se abrió tu correo, usa Copiar invitación y pégala en un mensaje. La invitación ya quedó guardada: cuando esa persona entre, o cuando pulses Vincular, se unirá a tu empresa.";
       }
+      toast("Invitación guardada. Si el correo no se abrió, copia la invitación.", "warn", 8000);
     }
 
+    renderUsuarios();
     if (btn) btn.disabled = false;
   });
 
@@ -4182,13 +4311,8 @@ async function renderUsuariosSupabase(el) {
       await navigator.clipboard.writeText(mensajeInvitacion);
       toast("Invitación copiada al portapapeles", "success");
     } catch (e) {
-      toast("No se pudo copiar. Copia manualmente desde el campo URL.", "warn");
+      toast("No se pudo copiar. Copia manualmente el enlace de registro.", "warn");
     }
-  });
-
-  document.getElementById("btn-abrir-app")?.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    window.open(appUrl, "_blank");
   });
 
   el.querySelectorAll(".rol-usuario").forEach((sel) => {
