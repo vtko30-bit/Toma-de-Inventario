@@ -24,7 +24,9 @@ inventario-app/
 ├── data.js                  # Capa de datos (Supabase o localStorage)
 ├── supabase/
 │   ├── config.toml
-│   └── functions/enviar-inventario-excel/  # Email Excel a admins (Resend)
+│   └── functions/
+│       ├── enviar-inventario-excel/  # Email Excel a admins (Resend)
+│       └── enviar-invitacion/        # Email de invitación (Resend)
 ├── supabase-config.js       # URL + anonKey (placeholders por defecto)
 ├── supabase-schema.sql      # Schema y políticas RLS
 ├── manifest.json            # Manifiesto PWA
@@ -149,7 +151,8 @@ La pantalla de inicio muestra **Continuar con Google** cuando Supabase está act
 - Al registrarse, el usuario indica el **nombre de su empresa**. Internamente se genera un `tenant_id` único por empresa.
 - El primer usuario que se registra para una empresa queda como `admin`.
 - Para sumar usuarios a la misma empresa, deben registrarse usando exactamente el **mismo nombre de empresa**.
-- Desde la sección **Usuarios** (visible solo para admins), puedes cambiar el rol de los demás integrantes.
+- Desde la sección **Usuarios** (visible solo para admins), puedes enviar una invitación por correo, copiar el mensaje, y cambiar el rol de los demás integrantes.
+- **Invitación por correo:** con la Edge Function `enviar-invitacion` desplegada (mismos secrets Resend que el Excel), el envío es automático. Si no está desplegada, se abre tu cliente de correo con el destinatario y el mensaje listos.
 - Las políticas RLS de Supabase garantizan que un tenant nunca pueda leer/modificar datos de otro.
 
 ## Envío Excel a administradores (al cerrar inventario)
@@ -176,13 +179,15 @@ Al pulsar **Guardar / Cerrar** en una toma, la app genera un Excel (hojas Resume
    supabase secrets set RESEND_FROM="Inventario <onboarding@resend.dev>"
    ```
    > En producción, verifica tu dominio en Resend y usa un `from` de ese dominio.
-4. Despliega la función:
+4. Despliega las funciones:
    ```bash
    supabase functions deploy enviar-inventario-excel
+   supabase functions deploy enviar-invitacion
    ```
 5. Cierra un inventario de prueba: los admins deben recibir el Excel adjunto.
+6. En **Usuarios**, prueba **Enviar invitación por correo**.
 
-El código de la función está en `supabase/functions/enviar-inventario-excel/`.
+El código está en `supabase/functions/enviar-inventario-excel/` y `supabase/functions/enviar-invitacion/`.
 
 ## Variables de entorno (opcional)
 

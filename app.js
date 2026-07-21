@@ -4039,20 +4039,18 @@ async function renderUsuariosSupabase(el) {
 
     <div class="card">
       <h2>Invitar nuevo usuario</h2>
-      <p>Por seguridad de Supabase, los usuarios nuevos deben <strong>registrarse ellos mismos</strong>. Sigue estos pasos:</p>
-      <ol style="line-height:1.8;">
-        <li>Comparte el enlace de la app y el nombre de tu empresa: <strong id="inv-tenant-label">${escapeAttr(tenantActual)}</strong></li>
-        <li>La otra persona entra al enlace y presiona <em>Crear cuenta</em></li>
-        <li>Se registra con su correo, contraseña y exactamente ese mismo nombre de empresa</li>
-        <li>Una vez registrada, vuelve aquí y asígnale el rol: <em>admin</em>, <em>usuario</em> o <em>solo inventario</em> (solo Toma de Inventario)</li>
-      </ol>
+      <p>Escribe el correo y envía la invitación. La otra persona debe <strong>crear su cuenta</strong> con el nombre de empresa <strong id="inv-tenant-label">${escapeAttr(tenantActual)}</strong>. Después puedes asignarle el rol aquí.</p>
       <div class="grid">
-        <label>URL de la app<input id="inv-url" value="${escapeAttr(appUrl)}" readonly /></label>
+        <label>Correo a invitar
+          <input type="email" id="inv-email" placeholder="persona@correo.com" autocomplete="email" />
+        </label>
         <label>Nombre de empresa<input id="inv-tenant" value="${escapeAttr(tenantActual)}" readonly /></label>
+        <label>URL de la app<input id="inv-url" value="${escapeAttr(appUrl)}" readonly /></label>
       </div>
       <div class="actions">
-        <button id="btn-copiar-invitacion">Copiar invitación al portapapeles</button>
-        <button id="btn-abrir-app" class="btn-link">Abrir app en nueva pestaña</button>
+        <button type="button" id="btn-enviar-invitacion">Enviar invitación por correo</button>
+        <button type="button" id="btn-copiar-invitacion" class="btn-link">Copiar invitación</button>
+        <button type="button" id="btn-abrir-app" class="btn-link">Abrir app en nueva pestaña</button>
       </div>
     </div>
 
@@ -4121,7 +4119,65 @@ async function renderUsuariosSupabase(el) {
     }
   });
 
-  document.getElementById("btn-copiar-invitacion").addEventListener("click", async () => {
+  document.getElementById("btn-enviar-invitacion")?.addEventListener("click", async () => {
+    const emailInput = document.getElementById("inv-email");
+    const to = String(emailInput?.value || "").trim().toLowerCase();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      toast("Escribe un correo válido", "warn");
+      emailInput?.focus();
+      return;
+    }
+
+    const btn = document.getElementById("btn-enviar-invitacion");
+    if (btn) btn.disabled = true;
+    const invitador = window.Auth?.currentUser?.nombre || window.Auth?.currentUser?.email || "";
+    let enviado = false;
+
+    try {
+      if (supabase?.functions?.invoke) {
+        const { data, error } = await supabase.functions.invoke("enviar-invitacion", {
+          body: {
+            to,
+            appUrl,
+            tenantId: tenantActual,
+            invitador
+          }
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        enviado = true;
+        toast(`Invitación enviada a ${to}`, "success", 6000);
+        if (emailInput) emailInput.value = "";
+      }
+    } catch (e) {
+      console.warn("Envío automático de invitación falló:", e);
+    }
+
+    if (!enviado) {
+      const asunto = encodeURIComponent("Invitación a Control de Inventario");
+      const cuerpo = encodeURIComponent(
+        `Te invitaron a Control de Inventario.\n\n` +
+        (invitador ? `Quién invita: ${invitador}\n` : "") +
+        `Enlace: ${appUrl}\n` +
+        `Nombre de empresa (escríbelo exactamente al crear la cuenta): ${tenantActual}\n\n` +
+        `Pasos:\n` +
+        `1. Abre el enlace\n` +
+        `2. Pulsa Crear cuenta\n` +
+        `3. Usa tu correo y ese mismo nombre de empresa\n` +
+        `4. Un admin te asignará el rol después`
+      );
+      try {
+        window.location.href = `mailto:${to}?subject=${asunto}&body=${cuerpo}`;
+        toast("Se abrió tu correo con la invitación. Pulsa Enviar.", "success", 7000);
+      } catch (_) {
+        toast("No se pudo abrir el correo. Usa Copiar invitación.", "warn");
+      }
+    }
+
+    if (btn) btn.disabled = false;
+  });
+
+  document.getElementById("btn-copiar-invitacion")?.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(mensajeInvitacion);
       toast("Invitación copiada al portapapeles", "success");
@@ -4130,7 +4186,7 @@ async function renderUsuariosSupabase(el) {
     }
   });
 
-  document.getElementById("btn-abrir-app").addEventListener("click", (ev) => {
+  document.getElementById("btn-abrir-app")?.addEventListener("click", (ev) => {
     ev.preventDefault();
     window.open(appUrl, "_blank");
   });

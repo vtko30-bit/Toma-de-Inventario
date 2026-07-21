@@ -5,6 +5,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.env.inventario.legacy
 *.log
 .idea/
 .vscode/
